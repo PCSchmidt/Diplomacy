@@ -1,3 +1,13 @@
 .venv/
 __pycache__/
 *.pyc
+
+# Credentials. Never commit these — this repository is public, and a key pushed
+# once lives in the history forever. .env.example is the committed template.
+.env
+.env.*
+!.env.example
+
+# Batch output
+runs/
+reports/

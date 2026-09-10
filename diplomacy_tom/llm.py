@@ -33,6 +33,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from . import config as _config  # loads .env on import; real env wins
+
 # --------------------------------------------------------------------------
 # Model registry
 # --------------------------------------------------------------------------
