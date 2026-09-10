@@ -152,10 +152,10 @@ Each ends in something showable.
 - One full game, end to end.
 - *Showable: the demo exists.*
 
-### Phase 3 — Viewer
-- Static React/D3 replay viewer: board, trust network, transcript, mental-model inspector.
-- Deployed to Pages, scrubbing recorded games.
-- *Showable: the demo is visitable.*
+### Phase 3 — Viewer ✅ **complete (§13)**
+- [x] Static replay viewer: board, trust network, transcript, mental-model inspector
+- [x] Licence boundary established (D7)
+- [ ] Deploy to Pages
 
 ### Phase 4 — Evidence ← **the phase that matters**
 - Batch runner, N games, both ablation arms on identical seeds.
@@ -533,3 +533,63 @@ mock now returns legal orders biased by belief state. The arms diverge (check 9)
 
 The general lesson is worth keeping: a test double that cannot fail the way
 production fails is not testing anything.
+
+
+---
+
+## 13. Phase 3 — replay viewer, and a licensing correction
+
+`viewer/`, `LICENSE`, `NOTICE`, `README.md`. Gate: **PASSED** (7 checks, `node
+viewer/test-viewer.mjs`, wired into `run_tests.py`).
+
+### D7 — the licence constraint I missed at D1
+
+**`diplomacy` is AGPL-3.0-or-later, and its bundled `standard.svg` is GPL (jDip).**
+D1 was decided on rules-engine risk and CICERO lineage without checking the licence.
+That was an omission, and it constrains what the finished project can be.
+
+The repo is private and unlicensed today, so nothing has triggered — AGPL attaches on
+distribution. Resolved before first publication:
+
+| Path | Licence | Why |
+| --- | --- | --- |
+| `diplomacy_tom/`, `tests/`, `schemas/` | AGPL-3.0-or-later | imports `diplomacy` — inherited, not chosen |
+| `viewer/` | MIT | consumes turn-log JSON only |
+
+The viewer is separable because **program output is not a derivative of the program**.
+The boundary is exactly the turn-log schema, and two things would collapse it:
+importing engine code from `viewer/`, or bundling the GPL jDip map. `NOTICE` states
+both. The viewer therefore draws its own schematic board.
+
+### Viewer design
+
+Static, no build step, no framework — GitHub Pages serves it as-is. Four panels on one
+phase scrubber: board, directional trust network, transcript, mental-model inspector.
+
+Two choices worth naming. **Trust edges are directional and bowed** — A's trust in B
+is not B's trust in A, and drawing one line per pair would have hidden half the data.
+And the transcript shows **prediction before verdict**: the evaluator's truthfulness
+score sits next to each message, with the kept/broken outcome resolved by looking
+*ahead* to the correction that cites it. That ordering is the eval story in miniature.
+
+### F9 — hand-authored data needs a canonical diff
+
+The province coordinates are authored for this project rather than extracted from the
+GPL map. Testing them against one sample game passed while three defects survived,
+because that game never visited the affected provinces:
+
+- `NRG` should be `NWG` (Norwegian Sea) — a unit there rendered invisibly;
+- `SWI` (Switzerland) missing entirely;
+- **`ARM` wrongly marked a supply centre** — 35 instead of the standard 34.
+
+Fixed, and the test now diffs the *whole* province and supply-centre set against
+`viewer/data/provinces.json`, emitted by the engine. Checking only what one run
+touched is not coverage — it is a sample.
+
+### Still unverified
+
+Everything runs on `MockProvider`. **No live API call has been made**, so prompt
+quality is unvalidated: whether the evaluator produces calibrated scores rather than
+saying 0.7 to everything is unknown. The 59% scorecard in the sample is mock noise and
+means nothing. That validation is the cheapest remaining de-risking step and should
+precede Phase 4.

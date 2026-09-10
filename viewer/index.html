@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Diplomacy — Belief Replay</title>
+<style>
+  :root{
+    --bg:#f7f7f5; --panel:#fff; --fg:#1c1c1a; --muted:#6b6b66;
+    --edge:#d6d6d0; --land:#ecebe6; --water:#dce8f0; --accent:#3a7bbf;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#15161a; --panel:#1d1f24; --fg:#e9e9e6; --muted:#9a9a94;
+      --edge:#33363d; --land:#25282e; --water:#1b2b38; --accent:#6aa9e0;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#15161a; --panel:#1d1f24; --fg:#e9e9e6; --muted:#9a9a94;
+    --edge:#33363d; --land:#25282e; --water:#1b2b38; --accent:#6aa9e0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--fg);
+    font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1400px;margin:0 auto;padding-block:20px;padding-left:16px;padding-right:16px;}
+  header.top h1{font-size:19px;margin:0 0 2px;letter-spacing:-.01em}
+  header.top p{margin:0 0 14px;color:var(--muted);max-width:78ch}
+  #meta{display:flex;flex-wrap:wrap;gap:14px;font-size:12px;color:var(--muted);
+    padding:8px 12px;background:var(--panel);border:1px solid var(--edge);border-radius:8px;}
+  #meta b{color:var(--fg);font-weight:600}
+  #meta .models{font-family:ui-monospace,Menlo,Consolas,monospace}
+
+  .controls{display:flex;align-items:center;gap:10px;margin:14px 0;flex-wrap:wrap}
+  .controls button{background:var(--panel);color:var(--fg);border:1px solid var(--edge);
+    border-radius:7px;padding:7px 13px;cursor:pointer;font-size:13px}
+  .controls button:hover{border-color:var(--accent)}
+  #scrub{flex:1;min-width:180px;accent-color:var(--accent)}
+  #phase-name{font-weight:700;font-family:ui-monospace,Menlo,Consolas,monospace;
+    min-width:74px;font-size:15px}
+  #phase-pos{color:var(--muted);font-size:12px;min-width:56px}
+
+  .grid{display:grid;gap:14px;grid-template-columns:1fr 420px;align-items:start}
+  .col{display:flex;flex-direction:column;gap:14px;min-width:0}
+  section.panel{background:var(--panel);border:1px solid var(--edge);border-radius:10px;
+    padding:12px 14px;min-width:0}
+  section.panel > h2{margin:0 0 2px;font-size:13px;letter-spacing:.02em;text-transform:uppercase}
+  section.panel > .hint{margin:0 0 10px;font-size:12px;color:var(--muted)}
+  svg{display:block;width:100%;height:auto;max-width:100%}
+  .prov-label{font:600 8.5px ui-monospace,Menlo,Consolas,monospace;fill:var(--fg);
+    text-anchor:middle;pointer-events:none;opacity:.8}
+  .tlabel{font:600 10px system-ui;fill:var(--fg);text-anchor:middle}
+  .tnode{cursor:pointer}
+  .trust-edge{pointer-events:stroke}
+
+  #transcript{max-height:460px;overflow-y:auto;display:flex;flex-direction:column;gap:9px}
+  .msg{border:1px solid var(--edge);border-radius:8px;padding:9px 11px;background:var(--bg)}
+  .msg header{display:flex;justify-content:space-between;align-items:center;gap:10px;
+    flex-wrap:wrap;font-size:12px}
+  .msg .body{margin:6px 0 4px;font-size:13px}
+  .msg .intents{margin:4px 0;font-size:11px}
+  .msg .intents code{background:var(--land);border-radius:4px;padding:1px 5px;
+    font-family:ui-monospace,Menlo,Consolas,monospace}
+  .msg footer{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:5px}
+  .rationale{font-size:11px;color:var(--muted);font-style:italic}
+  .score{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);
+    font-variant-numeric:tabular-nums}
+  .bar{display:inline-block;width:52px;height:5px;background:var(--edge);
+    border-radius:3px;overflow:hidden}
+  .bar.wide{display:block;width:100%;height:7px;margin:5px 0}
+  .bar i{display:block;height:100%}
+  .pill{font-size:10.5px;padding:2px 7px;border-radius:20px;border:1px solid var(--edge);
+    white-space:nowrap}
+  .pill.kept{background:#3f916022;border-color:#3f9160;color:#2e7a4d}
+  .pill.broken{background:#c2453c22;border-color:#c2453c;color:#c2453c;font-weight:700}
+  .pill.right{background:#3a7bbf22;border-color:#3a7bbf;color:#3a7bbf}
+  .pill.wrong{background:#b8862b22;border-color:#b8862b;color:#8a6516}
+  .pill.unknown{color:var(--muted)}
+  .belief{border:1px solid var(--edge);border-radius:8px;padding:9px 11px;
+    margin-bottom:9px;background:var(--bg)}
+  .belief-head{display:flex;justify-content:space-between;font-size:13px}
+  .belief-foot{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:11px}
+  .trustval{font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px}
+  .muted{color:var(--muted)}
+  .empty{color:var(--muted);font-size:13px;margin:6px 0}
+  .error{color:#c2453c;padding:16px;background:var(--panel);border-radius:10px;
+    border:1px solid #c2453c}
+  footer.note{margin-top:18px;font-size:11.5px;color:var(--muted);
+    border-top:1px solid var(--edge);padding-top:12px}
+  footer.note code{font-family:ui-monospace,Menlo,Consolas,monospace}
+  @media (max-width:1040px){ .grid{grid-template-columns:1fr} }
+</style>
+</head>
+<body>
+<div class="wrap" id="app">
+  <header class="top">
+    <h1>AI Diplomacy — belief replay</h1>
+    <p>Seven powers negotiate in private. Each keeps an explicit model of what it
+       believes the others intend, updated on what they say <em>and</em> on what
+       they actually do. Scrub through a recorded game and watch trust form, get
+       tested, and break.</p>
+    <div id="meta"></div>
+  </header>
+
+  <div class="controls">
+    <button id="prev">← Prev</button>
+    <button id="play">▶ Play</button>
+    <button id="next">Next →</button>
+    <span id="phase-name">—</span>
+    <input id="scrub" type="range" min="0" max="0" value="0" aria-label="Phase">
+    <span id="phase-pos"></span>
+  </div>
+
+  <div class="grid">
+    <div class="col">
+      <section class="panel">
+        <h2>Board</h2>
+        <p class="hint">Schematic, not cartographic. Boxes are provinces, dots mark
+           supply centres, colour shows ownership. ▲ fleet, ▬ army.</p>
+        <svg id="board" viewBox="0 0 1000 700" role="img" aria-label="Board"></svg>
+      </section>
+
+      <section class="panel">
+        <h2>Negotiation transcript</h2>
+        <p class="hint">Each message carries the evaluator's predicted truthfulness,
+           scored <em>before</em> orders resolve — then the verdict once they do.</p>
+        <div id="transcript"></div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section class="panel">
+        <h2>Trust network <span class="muted" style="text-transform:none">
+          — selected: <span id="sel-power">none</span></span></h2>
+        <p class="hint">Directional: each curved edge is one power's trust in another,
+           so A→B and B→A differ. Red expects betrayal, green expects loyalty.
+           Click a power to filter.</p>
+        <svg id="trust" viewBox="0 0 420 400" role="img" aria-label="Trust network"></svg>
+      </section>
+
+      <section class="panel">
+        <h2>Mental-model inspector</h2>
+        <p class="hint">What this power believed at this moment, against what the
+           others actually did afterwards. This is the eval story made visible.</p>
+        <div id="inspector"></div>
+      </section>
+    </div>
+  </div>
+
+  <footer class="note">
+    Viewer is MIT-licensed and reads only turn-log JSON — it imports no engine code.
+    The engine is AGPL-3.0-or-later because it builds on the
+    <code>diplomacy</code> package; see <code>NOTICE</code> for the boundary.
+    Load another game with <code>?log=&lt;url&gt;</code>.
+  </footer>
+</div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

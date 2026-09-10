@@ -10,6 +10,8 @@ GATES = ["tests/test_smoke.py", "tests/test_turn_log.py",
 
 def main() -> int:
     failed = []
+    # The viewer is JS and licence-separate, so it gets its own runner rather than
+    # being imported. Skipped (not failed) when node is unavailable.
     for gate in GATES:
         if not (ROOT / gate).exists():
             continue
@@ -17,6 +19,15 @@ def main() -> int:
         r = subprocess.run([sys.executable, str(ROOT / gate)], cwd=ROOT)
         if r.returncode != 0:
             failed.append(gate)
+    import shutil
+    if shutil.which("node") and (ROOT / "viewer" / "test-viewer.mjs").exists():
+        print(f"\n{'=' * 62}\n== viewer/test-viewer.mjs\n{'=' * 62}")
+        r = subprocess.run(["node", "viewer/test-viewer.mjs"], cwd=ROOT)
+        if r.returncode != 0:
+            failed.append("viewer/test-viewer.mjs")
+    else:
+        print("\n(node not found - skipping viewer gate)")
+
     print(f"\n{'=' * 62}")
     if failed:
         print(f"FAILED: {', '.join(failed)}")

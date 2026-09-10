@@ -29,6 +29,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install diplomacy jsonschema anthropic
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
       - name: Run all gates
         env:
           PYTHONHASHSEED: ${{ matrix.hashseed }}

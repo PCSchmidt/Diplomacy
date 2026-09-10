@@ -1,0 +1,41 @@
+AI Diplomacy — licensing notice
+===============================
+
+This repository is deliberately split into two differently-licensed parts,
+because the engine has an inherited obligation the viewer does not.
+
+  ./diplomacy_tom/, ./tests/, ./schemas/     AGPL-3.0-or-later   (see LICENSE)
+  ./viewer/                                  MIT                 (see viewer/LICENSE)
+
+Why the split
+-------------
+The engine imports `diplomacy` (https://pypi.org/project/diplomacy/), which is
+licensed AGPL-3.0-or-later. Importing it makes the engine a derivative work, so
+the engine is AGPL-3.0-or-later. That is an inherited obligation, not a
+preference.
+
+The viewer imports nothing from that package. It consumes turn-log JSON, which
+is program *output* — data, not a derivative of the program that produced it —
+so it carries no inherited obligation and is MIT.
+
+The boundary is exactly the turn-log schema (schemas/turn_log.schema.json).
+Anything that reads only that JSON stays on the MIT side.
+
+Keeping the split intact
+------------------------
+Two things would collapse it:
+
+  1. Importing `diplomacy`, or any engine module, from viewer/ code.
+  2. Bundling the jDip map SVG that ships with the `diplomacy` package
+     (diplomacy/maps/svg/standard.svg, "Copyright jDip - GPL License") into
+     viewer/. Distributing it would make the viewer GPL.
+
+The viewer therefore draws its own schematic board. See viewer/README.md for
+how to use the full jDip map locally if you accept the GPL terms for your own
+copy — that is a per-user choice and is not distributed here.
+
+Third-party
+-----------
+  diplomacy      AGPL-3.0-or-later   https://github.com/diplomacy/diplomacy
+  jsonschema     MIT
+  anthropic      MIT
