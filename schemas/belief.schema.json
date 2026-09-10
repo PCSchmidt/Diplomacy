@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/PCSchmidt/Diplomacy/schemas/belief.schema.json",
+  "title": "Power-Indexed Belief Store",
+  "description": "Export format for the belief store. Richer than the turn log's belief_snapshot: it carries the raw tier contents and evidence counts, not just the derived trust. Keyed observer->subject per ARCHITECTURE.md section 4. Validated on write, Meridian-style.",
+  "type": "object",
+  "required": ["schema_version", "observer", "dyads", "semantic"],
+  "additionalProperties": false,
+
+  "properties": {
+    "schema_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$" },
+
+    "observer": {
+      "description": "Whose head this is. A store instance belongs to exactly one power -- that is the isolation boundary, enforced by construction rather than convention.",
+      "$ref": "#/$defs/power"
+    },
+
+    "semantic": {
+      "description": "Tier 1. Shared world model plus this observer's own reading of it. Two powers may hold contradictory treaty beliefs; that is the point.",
+      "type": "object",
+      "required": ["treaties_believed"],
+      "additionalProperties": false,
+      "properties": {
+        "treaties_believed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["with_power", "kind", "since_phase"],
+            "additionalProperties": false,
+            "properties": {
+              "with_power": { "$ref": "#/$defs/power" },
+              "kind": { "enum": ["dmz", "non_aggression", "alliance", "support_pledge"] },
+              "since_phase": { "$ref": "#/$defs/phase_name" },
+              "provinces": { "type": "array", "items": { "type": "string" } },
+              "believed_active": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+
+    "dyads": {
+      "description": "One entry per (observer, subject) pair. Never contains the observer itself.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/dyad" }
+    }
+  },
+
+  "$defs": {
+    "power": {
+      "enum": ["AUSTRIA", "ENGLAND", "FRANCE", "GERMANY", "ITALY", "RUSSIA", "TURKEY"]
+    },
+    "phase_name": {
+      "type": "string",
+      "pattern": "^([SFW]\\d{4}[MRA]|COMPLETED)$"
+    },
+    "unit_interval": { "type": "number", "minimum": 0, "maximum": 1 },
+
+    "dyad": {
+      "type": "object",
+      "required": ["subject", "trust", "episodic", "corrections"],
+      "additionalProperties": false,
+      "properties": {
+        "subject": { "$ref": "#/$defs/power" },
+
+        "trust": {
+          "description": "Beta posterior over this subject's promise-keeping. Conjugate, so updates are exact; and it yields confidence alongside the mean rather than needing it bolted on later.",
+          "type": "object",
+          "required": ["alpha", "beta", "mean", "confidence"],
+          "additionalProperties": false,
+          "properties": {
+            "alpha": {
+              "description": "Prior + weighted kept commitments.",
+              "type": "number", "exclusiveMinimum": 0
+            },
+            "beta": {
+              "description": "Prior + weighted broken commitments.",
+              "type": "number", "exclusiveMinimum": 0
+            },
+            "mean": { "$ref": "#/$defs/unit_interval" },
+            "confidence": {
+              "description": "1 - 2*sd of the posterior. Derived from the distribution itself, not an arbitrary count threshold.",
+              "$ref": "#/$defs/unit_interval"
+            },
+            "observations": { "type": "integer", "minimum": 0 }
+          }
+        },
+
+        "episodic": {
+          "description": "Tier 2. STRICTLY what this observer has actually seen of this subject: messages received from them, and their publicly adjudicated orders. Never another dyad's private channel.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["phase", "kind"],
+            "additionalProperties": false,
+            "properties": {
+              "phase": { "$ref": "#/$defs/phase_name" },
+              "kind": { "enum": ["message_received", "message_sent", "public_orders"] },
+              "message_id": { "type": "string" },
+              "body": { "type": "string" },
+              "orders": { "type": "array", "items": { "type": "string" } },
+              "stated_intent": { "type": "array", "items": { "type": "object" } }
+            }
+          }
+        },
+
+        "corrections": {
+          "description": "Tier 3. Every divergence between what the subject said and what they did, as observed by this observer. Schema-analogous to a Meridian correction entry, and the ground truth the eval reads.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["phase", "message_id", "kept"],
+            "additionalProperties": false,
+            "properties": {
+              "phase": { "$ref": "#/$defs/phase_name" },
+              "message_id": { "type": "string" },
+              "kept": { "type": "boolean" },
+              "stated": { "type": "string" },
+              "actual": { "type": "string" },
+              "weight": {
+                "description": "Evidence weight applied. Betrayals are weighted more heavily than kept promises by default -- trust in Diplomacy is asymmetric.",
+                "type": "number", "exclusiveMinimum": 0
+              },
+              "trust_before": { "$ref": "#/$defs/unit_interval" },
+              "trust_after": { "$ref": "#/$defs/unit_interval" }
+            }
+          }
+        },
+
+        "estimated_goals": { "type": "array", "items": { "type": "string" } },
+
+        "estimated_alliances": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["with_power", "belief_strength"],
+            "additionalProperties": false,
+            "properties": {
+              "with_power": { "$ref": "#/$defs/power" },
+              "belief_strength": { "$ref": "#/$defs/unit_interval" }
+            }
+          }
+        },
+
+        "predicted_betrayal": {
+          "type": "object",
+          "required": ["probability"],
+          "additionalProperties": false,
+          "properties": {
+            "probability": { "$ref": "#/$defs/unit_interval" },
+            "horizon_phases": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    }
+  }
+}

@@ -127,8 +127,8 @@ Each ends in something showable.
 ### Phase 0 — De-risk
 - [x] `diplomacy` smoke test (§8)
 - [x] Turn-log schema + validator (§9)
-- [ ] Belief schema, power-indexed store, 3-power synthetic prototype
-- [ ] Isolation gate + deliberate-leak fixture
+- [x] Belief schema, power-indexed store, 3-power synthetic prototype (§10)
+- [x] Isolation gate + deliberate-leak fixture (§10)
 - [ ] Promote `possible_orders()` into engine module; fingerprint check into CI
 
 - Smoke-test `diplomacy` 1.1.2: drive a full game to completion **programmatically**
@@ -296,3 +296,85 @@ the same game.
 `normalize_volatile()` strips both, plus — under `drop_identity` — the per-instance
 game ids, which differ by construction between two runs of the same seed and would
 otherwise defeat arm-to-arm comparison.
+
+
+---
+
+## 10. Belief layer v1.0.0 — shipped
+
+`schemas/belief.schema.json`, `scripts/belief.py`, `scripts/isolation.py`,
+`scripts/test_belief.py`. Gate: **PASSED**.
+
+Implements the scope doc's first next-step — the power-indexed schema prototyped in
+isolation, 3 powers and synthetic messages, before the engine is built on it.
+
+### Trust is a Beta posterior, not a scalar
+
+`Beta(α, β)` over promise-keeping. Conjugate, so updates are exact and cheap, and
+**confidence falls out of the distribution** rather than being bolted on — which the
+Phase 4 calibration metric needs and a scalar would have forced us to retrofit.
+
+- Prior `Beta(1,1)`: uniform. The honest turn-one position is no opinion.
+- `confidence = 1 - 2·sd`, derived from the posterior itself rather than an arbitrary
+  observation-count threshold. Uniform prior → 0.42; ten kept promises → 0.85.
+- **Betrayals weigh double** (`DEFAULT_BETRAYAL_WEIGHT`). Diplomacy trust is
+  asymmetric — alliances take many turns to build and one stab to destroy — and a
+  symmetric model lags every betrayal it sees. Measured: after 10 kept promises, a
+  weighted stab drops trust to 0.786 where an unweighted one gives 0.846.
+- Mild per-phase decay toward the prior so ancient evidence stops dominating.
+
+### Isolation is enforced twice, on purpose
+
+**By construction:** a store belongs to exactly one observer, and `observe_message`
+rejects any message that observer was not party to. There is no method that would
+admit another power's private channel.
+
+**By inspection:** `isolation.py` scans assembled prompts against a registry of
+private items and their entitlement sets, then fails closed. This exists because the
+first line depends on every future caller staying disciplined.
+
+The deliberate-leak fixture is the centrepiece, and it is asserted to *fail*:
+
+| Fixture | Result |
+|---|---|
+| Third-party message planted in France's context | caught |
+| `enforce()` on that context | raised, failed closed |
+| Same leak reformatted (whitespace + case) | caught |
+| Same leak buried in a nested structure | caught |
+| Germany shown its own message | correctly silent (no false positive) |
+| 6 legitimate dyad contexts + 3 full-store audits | 0 false positives |
+
+The false-positive column matters as much as the true-positive one. A gate that cries
+wolf gets disabled, which is worse than the leaks it was meant to prevent — hence the
+`MIN_MATCH_LENGTH` floor.
+
+Verified end to end: England promises France support, privately tells Germany it is
+taking the Channel, then stabs. France's trust in England drops 0.500 → 0.250 and its
+`predicted_betrayal` rises to 0.750. **Germany's trust in England stays at 0.500** —
+it observed no betrayal, and belief is relational, not global.
+
+### The D4 seam is real, not aspirational
+
+`BeliefStore` is a runtime-checkable Protocol with two implementations.
+`make_store(arm, ...)` is the only place either class is named; nothing in the
+negotiation or decision layer may reference a concrete type.
+
+`StubBeliefStore` is deliberately inert — fixed trust, no accumulation, empty context
+— but emits **the same snapshot shape**, so the rest of the system cannot tell the
+arms apart structurally. Any measured difference is attributable to the belief layer
+and nothing else. Verified: identical betrayal input leaves `belief_on` at 0.250 and
+`belief_off` at 0.500.
+
+### F6 — validate untrusted data, not your own invariants
+
+A negative-fixture crash exposed a confusion worth recording. Corrupting a live
+store's Beta parameters produced an opaque `ZeroDivisionError` from the derived
+statistics; adding a domain guard then made corrupt state unserializable, so schema
+validation could never report on it at all.
+
+The resolution is that these are two different jobs. The class enforces its own
+invariants and **fails fast and legibly** on corruption (`_check_domain`). The schema
+defends against belief JSON arriving from **outside** the process — loaded from disk,
+or reconstructed from a turn log — which is what `validate_export()` is for. Writing
+a fixture that corrupted a live object was testing the wrong path; the realistic
+threat is untrusted input, and that is what is now tested.
