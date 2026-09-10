@@ -22,7 +22,7 @@ from typing import Any, Iterable
 
 from jsonschema import Draft202012Validator
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 SCHEMA_PATH = Path(__file__).resolve().parent.parent / "schemas" / "turn_log.schema.json"
 
 # Fields stamped at serialization time rather than being game data (finding F1).
@@ -129,6 +129,7 @@ def build_log(
     llm_powers: Iterable[str],
     scripted_powers: Iterable[str],
     models: dict[str, str],
+    provider: str = "none",
     turns: list[dict] | None = None,
     llm_calls: list[dict] | None = None,
     max_phases: int | None = None,
@@ -147,6 +148,7 @@ def build_log(
         "llm_powers": sorted(llm_powers),
         "scripted_powers": sorted(scripted_powers),
         "models": models,
+        "provider": provider,
     }
     if max_phases is not None:
         config["max_phases"] = max_phases
@@ -277,3 +279,20 @@ def save(log: dict, path: str | Path, *, strict: bool = True) -> Path:
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(log, fh, indent=2, sort_keys=True)
     return path
+
+
+# Providers whose output is synthetic. A run served by one of these is not evidence
+# about model behaviour, and eval refuses to report it as such.
+SYNTHETIC_PROVIDERS = {"mock", "none", "capture"}
+
+
+def is_synthetic(log: dict) -> bool:
+    """True when this run's responses did not come from a real model.
+
+    `replay` is not synthetic: it reproduces whatever provider was recorded, so the
+    recorded log's own provider is what counts. A replay of a mock run is still mock,
+    because the recording carries that provider forward.
+    """
+    provider = (log.get("run", {}).get("config", {}) or {}).get("provider", "none")
+    base = provider.split(":")[-1]
+    return base in SYNTHETIC_PROVIDERS

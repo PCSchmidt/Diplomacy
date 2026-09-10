@@ -63,10 +63,12 @@ class GameRunner:
         self._open_commitments: dict[str, list[dict]] = {}
 
         self.llm_calls: list[dict] = []
+        self.provider_name = "none"
         self.router = None
         self.negotiator = self.evaluator = self.decider = None
         if config.use_llm:
             provider = config.provider if config.provider is not None else MockProvider()
+            self.provider_name = getattr(provider, "name", type(provider).__name__)
             self.router = Router(config.routing, force_provider=provider)
             self.negotiator = ag.Negotiator(self.router, effort=config.effort)
             self.evaluator = ag.BeliefEvaluator(self.router, effort=config.effort)
@@ -350,6 +352,7 @@ class GameRunner:
             llm_powers=self.cfg.llm_powers,
             scripted_powers=self.cfg.scripted_powers,
             models=self.router.describe() if self.router else self.cfg.models,
+            provider=self.provider_name,
             turns=self.turns,
             max_phases=self.cfg.max_phases,
             llm_calls=self.llm_calls if self.cfg.use_llm else None,

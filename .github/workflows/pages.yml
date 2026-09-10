@@ -1,0 +1,74 @@
+name: pages
+
+# Publishes viewer/ to GitHub Pages. Only the MIT-licensed viewer and its sample
+# logs are deployed — no engine code is copied into the artifact, which is what
+# keeps the published site on the permissive side of the licence boundary (NOTICE).
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "viewer/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; don't cancel a running one mid-publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify the viewer's data contract before publishing
+        run: node viewer/test-viewer.mjs
+
+      - name: Assert no engine code leaked into the deploy artifact
+        # The licence split is only real if the published bundle honours it.
+        run: |
+          set -e
+          if grep -rlE "from \"\.\./diplomacy_tom|require\(.*diplomacy_tom" viewer/ ; then
+            echo "engine import found in viewer/ — licence boundary broken"
+            exit 1
+          fi
+          # Match the asset, not the word. board.js mentions jDip in a comment
+          # explaining that it deliberately does NOT use that map, and a scan loose
+          # enough to flag that is a scan people learn to ignore.
+          if find viewer -name "*.svg" | grep -q . ; then
+            echo "an SVG asset appeared in viewer/ — check its licence before deploying"
+            find viewer -name "*.svg"
+            exit 1
+          fi
+          if grep -rl "Copyright jDip" viewer/ 2>/dev/null | grep -q . ; then
+            echo "jDip copyright header found in viewer/ — would make the site GPL"
+            exit 1
+          fi
+          echo "viewer/ is clean: no engine imports, no GPL map asset"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: viewer
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

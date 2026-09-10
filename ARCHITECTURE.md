@@ -157,11 +157,11 @@ Each ends in something showable.
 - [x] Licence boundary established (D7)
 - [ ] Deploy to Pages
 
-### Phase 4 — Evidence ← **the phase that matters**
-- Batch runner, N games, both ablation arms on identical seeds.
-- Belief calibration, betrayal-prediction accuracy, alliance stability.
-- Cost-per-game table.
-- *Showable: Tier 1. This is the phase that gets you hired.*
+### Phase 4 — Evidence ✅ **harness complete (§14)**
+- [x] Batch runner, matched seeds across both arms
+- [x] Calibration, betrayal lead time, alliance stability, cost per game
+- [x] Metrics verified against known inputs
+- [ ] **Run it against a real model** — blocked on credentials
 
 ### Phase 5 — Funnel
 - Restructure `projects.astro`: one hero (Diplomacy, live embedded artifact), three
@@ -593,3 +593,78 @@ quality is unvalidated: whether the evaluator produces calibrated scores rather 
 saying 0.7 to everything is unknown. The 59% scorecard in the sample is mock noise and
 means nothing. That validation is the cheapest remaining de-risking step and should
 precede Phase 4.
+
+
+---
+
+## 14. Phase 4 — the eval harness (and why it has no results yet)
+
+`evaluation.py`, `batch.py`, `tests/test_eval.py`, `.github/workflows/pages.yml`.
+Gate: **PASSED** (8 checks). Seven gates now run in CI.
+
+### Metrics, and why these ones
+
+| Metric | Question | Chance level |
+| --- | --- | --- |
+| **Evaluator AUC** | Ranked by predicted truthfulness, do kept promises sort above broken ones? | 0.5 |
+| Evaluator Brier | Are the probabilities themselves right, not just ordered? | 0.25 |
+| Calibration bins | Does "0.7" mean 70%, or is it said to everything? | — |
+| **Betrayal lead** | Did belief move *before* the stab, or only record it after? | 0 |
+| Alliance span | How long do high-trust dyads survive? | — |
+| Cost per game | What does the evidence cost to produce? | — |
+
+AUC rather than accuracy: accuracy depends on threshold and class balance, and with
+promises mostly kept it would look impressive while meaning nothing. Lead time is the
+metric that separates a belief model from a scoreboard — a system that updates only
+after the betrayal scores 0, and that is precisely the failure worth catching.
+
+Metrics are verified against **known inputs**, not real games: a perfect evaluator
+must score 1.0, one that says 0.5 to everything must score 0.5, and a system that
+never anticipates must score lead 0. A harness that merely produces a number from a
+real game tells you nothing about whether the number is right.
+
+### Matched seeds
+
+The batch runs both arms on identical seeds and pairs them. Game outcomes vary
+enormously between seeds, so unpaired comparison would drown the belief layer's
+effect in seed noise long before N grew large enough to matter.
+
+### F10 — a log that lies about its own provenance
+
+The sample game recorded `models: claude-opus-5` while having been produced entirely
+by `MockProvider`. Nothing in the artifact said so. That is how fabricated evidence
+gets made — not by intent, but by a plausible-looking file outliving the context that
+explains it.
+
+Fixed at three levels: `provider` is now **required** by the schema (v1.1.0), the
+runner records the real provider, and `Report.is_evidence` is false whenever either
+arm is synthetic. The markdown report then leads with a refusal rather than a table:
+
+> **These numbers are not evidence.** At least one arm was produced by a synthetic
+> provider, whose responses are uncorrelated with the outcomes they are scored
+> against.
+
+One synthetic arm poisons the whole comparison, and that is asserted as a fixture.
+
+### Status: no findings
+
+**The harness has produced no evidence, because no live model has run.** There are no
+API credentials on this machine. Every number currently obtainable is mock noise, and
+the code says so rather than presenting it.
+
+To produce real results:
+
+```bash
+export ANTHROPIC_API_KEY=...
+python -m diplomacy_tom.batch --games 20 --provider anthropic --routing cheap        --out runs/ --report reports/ablation.md
+```
+
+### Pages
+
+`.github/workflows/pages.yml` publishes **only `viewer/`**, and asserts the licence
+boundary before deploying: no engine imports, no SVG assets, no jDip copyright
+header. The first version of that check flagged `board.js` for containing the word
+"jDip" — in a comment explaining it deliberately does *not* use that map. Narrowed to
+match the asset rather than the word, for the same reason as F7: a check loose enough
+to flag its own documentation is a check people learn to ignore. Both directions are
+tested with a planted fixture.
