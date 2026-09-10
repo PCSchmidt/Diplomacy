@@ -187,6 +187,28 @@ def main() -> int:
         print("    LEAK NOT CAUGHT -- nested")
         failures.append("gate missed a nested leak")
 
+    # F7: two dyads sending byte-identical text. France holds its own copy
+    # legitimately, so the scan must not report England->Germany's copy as a leak.
+    twin_fr = msg("t1", "FRANCE", "GERMANY", "I will hold in Munich and take no action in Silesia.")
+    twin_en = msg("t2", "ENGLAND", "GERMANY", "I will hold in Munich and take no action in Silesia.")
+    reg2 = iso.IsolationRegistry()
+    reg2.register_message(twin_fr)
+    reg2.register_message(twin_en)
+    if iso.scan({"prompt": twin_fr["body"]}, "FRANCE", reg2):
+        print("    FALSE POSITIVE: identical text from another dyad flagged")
+        failures.append("gate false-positived on text the viewer legitimately holds")
+    else:
+        print("    no false positive on identical text across dyads (F7)")
+
+    # The documented blind spot: England-only text IS caught when nothing entitled
+    # to France duplicates it.
+    reg3 = iso.IsolationRegistry()
+    reg3.register_message(twin_en)
+    if iso.scan({"prompt": twin_en["body"]}, "FRANCE", reg3):
+        print("    same text still caught when France holds no twin (correct)")
+    else:
+        failures.append("gate missed a leak with no duplicate to explain it")
+
     # Germany IS entitled to m3 -- this must NOT be flagged.
     if iso.scan({"prompt": m3["body"]}, "GERMANY", registry):
         print("    FALSE POSITIVE: flagged Germany for its own message")

@@ -441,3 +441,95 @@ the outcome.
 Flagged in the test body as well as here, because the failure mode is someone
 "fixing" a legitimately failing check by forcing the arms back into agreement, which
 would silently disable the ablation.
+
+
+---
+
+## 12. Phase 2 — LLM negotiation
+
+`llm.py`, `agents.py`, extended `runner.py`, `tests/test_phase2.py`. Gate: **PASSED**
+(11 checks). Runs entirely on `MockProvider` — no API key, no network, no cost — so
+it works in CI.
+
+### API shapes verified against current docs, not memory
+
+Several patterns in my working memory were stale. Corrected here and asserted by a
+stub-client test (check 11) so a shape error surfaces free rather than on a paid call:
+
+| | Stale | Current |
+|---|---|---|
+| Thinking | `{type: "enabled", budget_tokens: N}` | `{type: "adaptive"}` — `budget_tokens` is a **400** on current models |
+| Effort | top-level | inside `output_config` |
+| Structured output | `output_format` | `output_config.format`, or strict tool use |
+| Default model | assorted | `claude-opus-5` |
+
+Pricing per MTok: Opus 5 $5/$25, Sonnet 5 $2/$10, Haiku 4.5 $1/$5.
+
+### Provider abstraction
+
+`Provider` is the seam; nothing above `llm.py` knows which provider, or whether a
+call is live, recorded, replayed or mocked.
+
+- **`AnthropicProvider`** — official SDK. Prompt caching with an explicit breakpoint,
+  adaptive thinking, strict tool use, refusal handling (`stop_reason: "refusal"`
+  returns HTTP 200 and must raise rather than be read as content).
+- **`OpenRouterProvider`** — raw HTTP; it has no official Python SDK, and an
+  OpenAI-compatible shim is the wrong way to call Claude. Prices are **fetched from
+  OpenRouter's own catalogue**, never invented — a made-up number would put fiction
+  into cost-per-game.
+- **`ReplayProvider` / `RecordingProvider`** — determinism. Recording is a
+  first-class provider, not a test hack: it is what makes an LLM game reproducible,
+  and therefore what makes D4 and CI possible at all. Lookup is by prompt hash, so a
+  changed prompt is a loud miss rather than a silently wrong answer.
+- **`MockProvider`** — deterministic synthetic responses derived from the prompt hash.
+
+Routing presets: `quality` (Opus 5 throughout), `balanced`, `cheap`. **Every preset
+keeps the strongest model on the belief evaluator** — it is the component under test
+in D4, so degrading it would confound the result being measured.
+
+### Caching is designed in, not retrofitted
+
+`LLMRequest` separates `cacheable_system` from `system` so breakpoint placement is
+explicit rather than accidental. Check 8 asserts each role's prefix is byte-identical
+across calls and contains no volatile tokens — a year, a seed, a phase name in the
+prefix would silently drop the hit rate to zero.
+
+### The separation test
+
+The integrity property is asserted the way the leak fixture is — by planting content
+that must not appear. A message the observer **sent** is planted, then:
+
+- the Negotiator's context contains it (correct — it is that power's own reasoning);
+- `evaluator_context()` does **not**;
+- the **assembled evaluator prompt** does not either (context shape is one thing;
+  what reaches the model is what matters).
+
+### F7 — the isolation gate's false-positive class
+
+Wiring the mock surfaced a real defect. Two dyads sent byte-identical bodies, and the
+scan flagged a power's *own* legitimate message as someone else's leak.
+
+This is not a mock artifact: real powers send identical short messages ("Agreed.",
+"I will hold in Munich"). Left alone it would have produced steady false alarms —
+and by the project's own reasoning, a gate that cries wolf gets switched off, which
+is worse than the leaks it prevents.
+
+Fixed by checking whether the matched text is attributable to something the viewer
+**is** entitled to before flagging. The residual blind spot is documented in the
+code: a genuine leak whose text exactly duplicates an entitled message is invisible.
+That trade is accepted deliberately. Both directions are now fixtures.
+
+### F8 — a mock that never exercises the thing under test
+
+The first mock produced schema-valid but *illegal* orders, so all 16 LLM decisions
+failed the orders-valid gate and fell back to holding. The decision layer was never
+exercised, and both ablation arms played identical games — **D4 was untestable in
+CI while appearing to pass.**
+
+Fixed with `mock_hint`: a structured echo of data already in the prompt, read only by
+`MockProvider`, excluded from `cache_key` so it cannot affect hashing or replay. The
+mock now returns legal orders biased by belief state. The arms diverge (check 9), and
+`belief_off` stays inert at a single trust value.
+
+The general lesson is worth keeping: a test double that cannot fail the way
+production fails is not testing anything.

@@ -89,12 +89,29 @@ def scan(context: object, viewer: str, registry: IsolationRegistry) -> list[str]
     else:
         blob = _normalize(json.dumps(context, default=str))
 
+    # Text the viewer IS entitled to. Two powers can independently send byte-identical
+    # messages -- "Agreed.", "I will hold in Munich." -- and a pure substring scan
+    # cannot tell whose copy it found. Without this, the viewer's own legitimate
+    # message gets reported as someone else's leak (finding F7). A gate that cries
+    # wolf gets switched off, which is worse than the leaks it prevents.
+    entitled_text = {
+        _normalize(item.text)
+        for item in registry.items.values()
+        if viewer in item.entitled
+    }
+
     violations: list[str] = []
     for item in registry.items.values():
         if viewer in item.entitled:
             continue
         needle = _normalize(item.text)
         if len(needle) < MIN_MATCH_LENGTH:
+            continue
+        if needle in entitled_text:
+            # Presence is fully explained by content the viewer may legitimately
+            # hold. This is a real blind spot, not a clean pass: an actual leak of
+            # text that happens to duplicate an entitled message is invisible here.
+            # Accepted deliberately -- the alternative is constant false alarms.
             continue
         if needle in blob:
             violations.append(
