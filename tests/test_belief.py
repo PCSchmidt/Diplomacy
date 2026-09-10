@@ -9,11 +9,19 @@ input proves nothing, so this asserts the gate FAILS on a planted leak.
 
 from __future__ import annotations
 
+import sys as _sys
+from pathlib import Path as _Path
+_ROOT = _Path(__file__).resolve().parent.parent
+for _p in (str(_ROOT), str(_ROOT / "tests")):
+    if _p not in _sys.path:
+        _sys.path.insert(0, _p)
+
+
 import sys
 
-import belief as bl
-import isolation as iso
-import turn_log as tl
+from diplomacy_tom import belief as bl
+from diplomacy_tom import isolation as iso
+from diplomacy_tom import turn_log as tl
 
 
 def msg(mid, sender, recipient, body, intent=None):
@@ -237,7 +245,8 @@ def main() -> int:
 
     # --- 8. snapshots drop into the turn log unchanged -------------------
     snaps = [s for observer in P for s in stores[observer].snapshot()]
-    saved = __import__("test_turn_log").play(seed=5, phases=2)
+    from test_turn_log import play
+    saved = play(seed=5, phases=2)
     log = tl.build_log(
         saved, seed=5, arm="belief_on",
         llm_powers=P, scripted_powers=[], models={"negotiator": "claude-sonnet-5"},

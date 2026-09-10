@@ -129,7 +129,9 @@ Each ends in something showable.
 - [x] Turn-log schema + validator (§9)
 - [x] Belief schema, power-indexed store, 3-power synthetic prototype (§10)
 - [x] Isolation gate + deliberate-leak fixture (§10)
-- [ ] Promote `possible_orders()` into engine module; fingerprint check into CI
+- [x] Promote `possible_orders()` into engine module; fingerprint check into CI (§11)
+
+**Phase 0 complete.**
 
 - Smoke-test `diplomacy` 1.1.2: drive a full game to completion **programmatically**
   on Python 3.14. Install resolving is not sufficient evidence. *If this fails, D1
@@ -140,10 +142,9 @@ Each ends in something showable.
 
 **Gate:** leak fixture fails as designed; schema validates; a real game runs headless.
 
-### Phase 1 — Deterministic spine
-- Full game loop, scripted bots only, no LLM.
-- Complete replay JSON emitted and re-validated.
-- *Showable: "I built a testable engine."*
+### Phase 1 — Deterministic spine ✅ **complete (§11)**
+- [x] Full game loop, scripted bots only, no LLM.
+- [x] Complete replay JSON emitted and re-validated.
 
 ### Phase 2 — Agents
 - LLM negotiation layer; structurally separate belief evaluator.
@@ -378,3 +379,65 @@ defends against belief JSON arriving from **outside** the process — loaded fro
 or reconstructed from a turn log — which is what `validate_export()` is for. Writing
 a fixture that corrupted a live object was testing the wrong path; the realistic
 threat is untrusted input, and that is what is now tested.
+
+
+---
+
+## 11. Phase 0 closed, Phase 1 shipped
+
+`diplomacy_tom/` (package), `tests/` (four gates), `run_tests.py`,
+`.github/workflows/ci.yml`. **All gates pass.**
+
+### Layout
+
+Code moved out of `scripts/` into a real package before more files accumulated —
+the cheapest moment to do it.
+
+```
+diplomacy_tom/   engine.py  bots.py  runner.py  belief.py  isolation.py  turn_log.py
+schemas/         turn_log.schema.json  belief.schema.json
+tests/           test_smoke.py  test_turn_log.py  test_belief.py  test_runner.py
+run_tests.py     runs all four gates
+```
+
+No `pyproject.toml`. This is a runnable project, not a distributable library, and an
+editable-install step would be friction for no benefit.
+
+### engine.py — the F3 choke-point, now permanent
+
+Every interaction with the adjudicator goes through `engine.py`.
+`get_all_possible_orders()` and `get_orderable_locations()` are wrapped and sorted;
+calling either directly is now the documented mistake. `new_game()` also strips
+`NO_PRESS` at the source rather than relying on `build_log()` to clean up after it.
+
+### Phase 1 result
+
+A 16-turn game, scripted policies, no API calls: 68 messages, 68 commitments checked
+(65 kept, 3 broken), 672 belief snapshots, 112 decisions. Trust spread across dyads
+reached 0.397 — the belief layer is demonstrably doing something on real game data,
+not just on the synthetic fixture. Zero isolation leaks across all 7 powers for the
+whole game. Log round-trips at 373 KB.
+
+Every pipeline gate in §5 now runs each phase, including context-assembly on contexts
+that Phase 1 never sends anywhere. It is cheap, and a leak introduced now should fail
+now rather than the first time a real prompt is built.
+
+### CI
+
+Two jobs. The gate matrix runs all four gates under `PYTHONHASHSEED` 0, 1, 12345 and
+random. A separate `fingerprint` job asserts the same seed yields the same game
+across four different hash seeds — this is the permanent regression test for F3, and
+it needs its own job because the property is cross-process and no single matrix entry
+can demonstrate it. Verified locally: `05e48b916f102527…` under all four.
+
+### ⚠ One assertion must invert in Phase 2
+
+`test_runner.py` check 6 asserts both ablation arms play an **identical** game.
+That is correct only while scripted policies ignore beliefs. Once the decision layer
+reads belief state, the arms are *supposed* to diverge — that divergence is the D4
+result itself. What must stay identical then is the seed and initial conditions, not
+the outcome.
+
+Flagged in the test body as well as here, because the failure mode is someone
+"fixing" a legitimately failing check by forcing the arms back into agreement, which
+would silently disable the ablation.

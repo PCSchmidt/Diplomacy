@@ -7,6 +7,14 @@ fail -- same discipline as the deliberate-leak fixture for the isolation gate.
 
 from __future__ import annotations
 
+import sys as _sys
+from pathlib import Path as _Path
+_ROOT = _Path(__file__).resolve().parent.parent
+for _p in (str(_ROOT), str(_ROOT / "tests")):
+    if _p not in _sys.path:
+        _sys.path.insert(0, _p)
+
+
 import copy
 import json
 import random
@@ -15,13 +23,10 @@ import sys
 from diplomacy import Game
 from diplomacy.utils.export import from_saved_game_format, to_saved_game_format
 
-import turn_log as tl
+from diplomacy_tom import turn_log as tl
 
 
-def possible_orders(game):
-    """Sorted at the boundary. See finding F3 in ARCHITECTURE.md -- the library's
-    enumeration order varies with PYTHONHASHSEED across processes."""
-    return {loc: sorted(orders) for loc, orders in game.get_all_possible_orders().items()}
+from diplomacy_tom.engine import possible_orders
 
 
 def play(seed: int, phases: int = 8) -> dict:

@@ -6,6 +6,14 @@ Checks, in order:
   3. to_saved_game_format / from_saved_game_format round-trips faithfully.
   4. Adjudication is deterministic given identical orders.
 """
+
+import sys as _sys
+from pathlib import Path as _Path
+_ROOT = _Path(__file__).resolve().parent.parent
+for _p in (str(_ROOT), str(_ROOT / "tests")):
+    if _p not in _sys.path:
+        _sys.path.insert(0, _p)
+
 import random
 import sys
 
@@ -31,15 +39,7 @@ def normalize(saved):
     return out
 
 
-def possible_orders(game):
-    """get_all_possible_orders() returns set-derived lists whose ORDER varies with
-    PYTHONHASHSEED across processes. Contents are stable; sequence is not. Left
-    unsorted this silently breaks cross-process replay and the D4 ablation, and
-    it churns the prompt prefix that prompt caching depends on.
-
-    Every consumer of this API must go through here. See ARCHITECTURE.md section 5.
-    """
-    return {loc: sorted(orders) for loc, orders in game.get_all_possible_orders().items()}
+from diplomacy_tom.engine import possible_orders  # the F3 choke-point
 
 
 def play_random_game(seed, max_phases=200):
