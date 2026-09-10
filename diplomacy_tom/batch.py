@@ -19,6 +19,7 @@ from pathlib import Path
 
 from . import evaluation as ev
 from . import turn_log as tl
+from .llm import PRESETS
 from .runner import GameConfig, GameRunner
 
 
@@ -97,8 +98,8 @@ def main(argv=None) -> int:
     ap.add_argument("--max-phases", type=int, default=20)
     ap.add_argument("--provider", default="mock",
                     choices=["mock", "anthropic", "openrouter"])
-    ap.add_argument("--routing", default="quality",
-                    choices=["quality", "balanced", "cheap"])
+    ap.add_argument("--routing", default="quality", choices=sorted(PRESETS),
+                    help="routing preset (derived from llm.PRESETS)")
     ap.add_argument("--seed0", type=int, default=1901)
     ap.add_argument("--workers", type=int, default=1)
     ap.add_argument("--out", default=None, help="directory for per-game logs")
