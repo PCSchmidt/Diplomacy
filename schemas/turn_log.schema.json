@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/PCSchmidt/Diplomacy/schemas/turn_log.schema.json",
+  "title": "AI Diplomacy Turn Log",
+  "description": "The single product artifact. Consumed by the eval harness, the static replay viewer, and both D4 ablation arms. See ARCHITECTURE.md sections 3 and 8.",
+  "type": "object",
+  "required": ["schema_version", "run", "game", "turns"],
+  "additionalProperties": false,
+
+  "properties": {
+    "schema_version": {
+      "description": "Semver. A breaking change is a gate failure, not a runtime surprise.",
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+
+    "run": {
+      "type": "object",
+      "required": ["run_id", "created_utc", "seed", "arm", "config", "code_version"],
+      "additionalProperties": false,
+      "properties": {
+        "run_id": { "type": "string", "minLength": 1 },
+        "created_utc": { "type": "string", "format": "date-time" },
+        "seed": {
+          "description": "Required for D4: both arms must run identical seeds.",
+          "type": "integer"
+        },
+        "arm": {
+          "description": "Which side of the ablation this run is. belief_off uses the stub belief store.",
+          "enum": ["belief_on", "belief_off"]
+        },
+        "config": {
+          "type": "object",
+          "required": ["llm_powers", "scripted_powers", "models"],
+          "additionalProperties": false,
+          "properties": {
+            "llm_powers": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/power" },
+              "minItems": 1,
+              "uniqueItems": true
+            },
+            "scripted_powers": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/power" },
+              "uniqueItems": true
+            },
+            "models": {
+              "description": "Role -> model id. Records the routing decision from ARCHITECTURE.md section 5.",
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            },
+            "max_phases": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "code_version": {
+          "type": "object",
+          "required": ["git_sha", "diplomacy_version"],
+          "additionalProperties": false,
+          "properties": {
+            "git_sha": { "type": "string" },
+            "diplomacy_version": { "type": "string" },
+            "python_version": { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "game": {
+      "description": "The `diplomacy` saved-game format, embedded VERBATIM. Not translated, so adjudication data stays canonical and from_saved_game_format() still works on this subtree. Our layers live in `turns` alongside it.",
+      "type": "object",
+      "required": ["id", "map", "rules", "phases"],
+      "properties": {
+        "id": { "type": "string" },
+        "map": { "type": "string" },
+        "rules": {
+          "description": "Must not contain NO_PRESS. This is a negotiation game.",
+          "type": "array",
+          "items": { "type": "string" },
+          "not": { "contains": { "const": "NO_PRESS" } }
+        },
+        "phases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "state", "orders", "results"],
+            "properties": {
+              "name": { "$ref": "#/$defs/phase_name" },
+              "state": {
+                "type": "object",
+                "required": ["zobrist_hash", "units", "centers"],
+                "properties": {
+                  "zobrist_hash": { "type": "string" },
+                  "timestamp": {
+                    "description": "VOLATILE (finding F1). Stamped at serialization time, not game data. Never compare on it; normalize_volatile() strips it.",
+                    "type": "integer"
+                  }
+                }
+              },
+              "orders": { "type": "object" },
+              "results": { "type": "object" },
+              "messages": { "type": "array" }
+            }
+          }
+        }
+      }
+    },
+
+    "turns": {
+      "description": "Our layer, one entry per phase, aligned to game.phases[].name.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/turn" }
+    },
+
+    "llm_calls": {
+      "description": "Recorded model I/O so a run replays without hitting the API and both ablation arms replay identically.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["call_id", "phase", "role", "model", "prompt_sha256", "response"],
+        "additionalProperties": false,
+        "properties": {
+          "call_id": { "type": "string" },
+          "phase": { "$ref": "#/$defs/phase_name" },
+          "role": { "enum": ["negotiator", "belief_evaluator", "decision"] },
+          "model": { "type": "string" },
+          "prompt_sha256": { "$ref": "#/$defs/sha256" },
+          "response": { "type": "string" },
+          "usage": { "$ref": "#/$defs/usage" },
+          "cache_read_tokens": { "type": "integer", "minimum": 0 }
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "power": {
+      "enum": ["AUSTRIA", "ENGLAND", "FRANCE", "GERMANY", "ITALY", "RUSSIA", "TURKEY"]
+    },
+    "phase_name": {
+      "description": "e.g. S1901M, F1902R, W1903A, or COMPLETED.",
+      "type": "string",
+      "pattern": "^([SFW]\\d{4}[MRA]|COMPLETED)$"
+    },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "trust": {
+      "description": "Observer's trust in subject. 0 = expects betrayal, 1 = fully trusted.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "input_tokens": { "type": "integer", "minimum": 0 },
+        "output_tokens": { "type": "integer", "minimum": 0 },
+        "cost_usd": { "type": "number", "minimum": 0 }
+      }
+    },
+
+    "turn": {
+      "type": "object",
+      "required": ["phase", "board_hash", "messages", "beliefs", "decisions", "corrections"],
+      "additionalProperties": false,
+      "properties": {
+        "phase": { "$ref": "#/$defs/phase_name" },
+        "board_hash": {
+          "description": "zobrist_hash of this phase's state. Canonical position identity, stable across processes, so it is the replay-verification primitive.",
+          "type": "string"
+        },
+        "messages": { "type": "array", "items": { "$ref": "#/$defs/message" } },
+        "beliefs": { "type": "array", "items": { "$ref": "#/$defs/belief_snapshot" } },
+        "decisions": { "type": "array", "items": { "$ref": "#/$defs/decision" } },
+        "corrections": { "type": "array", "items": { "$ref": "#/$defs/correction" } },
+        "cost": { "$ref": "#/$defs/usage" }
+      }
+    },
+
+    "message": {
+      "description": "A negotiation message. stated_intent is the structured claim the Evaluator scores and the post-adjudication diff checks. Without it there is no ground truth for betrayal.",
+      "type": "object",
+      "required": ["message_id", "sender", "recipient", "body"],
+      "additionalProperties": false,
+      "properties": {
+        "message_id": { "type": "string" },
+        "sender": { "$ref": "#/$defs/power" },
+        "recipient": { "$ref": "#/$defs/power" },
+        "body": { "type": "string" },
+        "stated_intent": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["commitment_type", "text"],
+            "additionalProperties": false,
+            "properties": {
+              "commitment_type": {
+                "enum": ["move", "support", "hold", "dmz", "non_aggression", "alliance", "none"]
+              },
+              "text": { "type": "string" },
+              "concerns_units": { "type": "array", "items": { "type": "string" } },
+              "concerns_provinces": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
+        "evaluation": {
+          "description": "Written by the belief Evaluator, which sees ONLY the counterpart's messages and public order record, never the sender's private strategy.",
+          "type": "object",
+          "required": ["predicted_truthfulness", "confidence"],
+          "additionalProperties": false,
+          "properties": {
+            "predicted_truthfulness": { "$ref": "#/$defs/confidence" },
+            "confidence": { "$ref": "#/$defs/confidence" },
+            "rationale": { "type": "string" },
+            "evaluator_call_id": { "type": "string" }
+          }
+        }
+      }
+    },
+
+    "belief_snapshot": {
+      "description": "One dyad's belief state at this phase. Keyed observer->subject per ARCHITECTURE.md section 4. Isolation is enforced upstream by the context-assembly gate; this is the record of it.",
+      "type": "object",
+      "required": ["observer", "subject", "trust"],
+      "additionalProperties": false,
+      "properties": {
+        "observer": { "$ref": "#/$defs/power" },
+        "subject": { "$ref": "#/$defs/power" },
+        "trust": { "$ref": "#/$defs/trust" },
+        "trust_delta": { "type": "number" },
+        "estimated_goals": { "type": "array", "items": { "type": "string" } },
+        "estimated_alliances": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["with_power", "belief_strength"],
+            "additionalProperties": false,
+            "properties": {
+              "with_power": { "$ref": "#/$defs/power" },
+              "belief_strength": { "$ref": "#/$defs/confidence" }
+            }
+          }
+        },
+        "predicted_betrayal": {
+          "description": "The D4 metric surface: did belief shift toward betrayal BEFORE it happened, or only after?",
+          "type": "object",
+          "required": ["probability"],
+          "additionalProperties": false,
+          "properties": {
+            "probability": { "$ref": "#/$defs/confidence" },
+            "horizon_phases": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+
+    "decision": {
+      "type": "object",
+      "required": ["power", "orders"],
+      "additionalProperties": false,
+      "properties": {
+        "power": { "$ref": "#/$defs/power" },
+        "orders": { "type": "array", "items": { "type": "string" } },
+        "rationale": { "type": "string" },
+        "honored_commitments": { "type": "array", "items": { "type": "string" } },
+        "broken_commitments": { "type": "array", "items": { "type": "string" } },
+        "decision_call_id": { "type": "string" },
+        "invalid_order_retries": {
+          "description": "How often the orders-valid gate re-prompted. An agent-reliability metric in its own right.",
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+
+    "correction": {
+      "description": "Ground truth for the eval. Written post-adjudication by diffing stated_intent against actual orders. Schema-analogous to a Meridian correction entry.",
+      "type": "object",
+      "required": ["observer", "subject", "message_id", "kept"],
+      "additionalProperties": false,
+      "properties": {
+        "observer": { "$ref": "#/$defs/power" },
+        "subject": { "$ref": "#/$defs/power" },
+        "message_id": { "type": "string" },
+        "kept": { "type": "boolean" },
+        "stated": { "type": "string" },
+        "actual": { "type": "string" },
+        "trust_before": { "$ref": "#/$defs/trust" },
+        "trust_after": { "$ref": "#/$defs/trust" }
+      }
+    }
+  }
+}

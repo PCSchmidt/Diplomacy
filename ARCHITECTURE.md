@@ -73,7 +73,7 @@ Consequences, all binding:
 - The log schema is **versioned and validated on write**, Meridian-style. A schema
   break is a gate failure, not a runtime surprise.
 
-Write this schema in Phase 0, before anything depends on it.
+Write this schema in Phase 0, before anything depends on it. **Done — see §9.**
 
 ---
 
@@ -125,6 +125,12 @@ does not survive that. Designed in from the start, not bolted on:
 Each ends in something showable.
 
 ### Phase 0 — De-risk
+- [x] `diplomacy` smoke test (§8)
+- [x] Turn-log schema + validator (§9)
+- [ ] Belief schema, power-indexed store, 3-power synthetic prototype
+- [ ] Isolation gate + deliberate-leak fixture
+- [ ] Promote `possible_orders()` into engine module; fingerprint check into CI
+
 - Smoke-test `diplomacy` 1.1.2: drive a full game to completion **programmatically**
   on Python 3.14. Install resolving is not sufficient evidence. *If this fails, D1
   reopens and the mini-map fallback is live.*
@@ -227,3 +233,66 @@ and orderable locations is likewise sorted.
 Verified fixed: identical cross-process fingerprint `0f9e0213…` under
 `PYTHONHASHSEED` of 0, 1, and 12345. That fingerprint check belongs in CI — it is the
 regression test for the whole determinism property.
+
+
+---
+
+## 9. Turn-log schema v1.0.0 — shipped
+
+`schemas/turn_log.schema.json` (JSON Schema 2020-12), `scripts/turn_log.py`,
+`scripts/test_turn_log.py`. Gate: **PASSED**.
+
+### Design: embed, don't translate
+
+The `diplomacy` saved-game format is embedded **verbatim** under `game`. Our layers
+(`turns`, `llm_calls`) sit alongside it rather than replacing it.
+
+Rationale: adjudication data stays canonical, so there is no translation layer to
+carry bugs between what the engine resolved and what we logged; the embedded subtree
+still loads via `from_saved_game_format()` (asserted by the test, check 4); and our
+schema versions independently of the library's. Cost is one level of nesting.
+
+### Two-layer verification
+
+JSON Schema proves each piece is well-formed. It cannot express relationships
+*between* pieces, so `check_alignment()` covers those separately — turn/phase
+correspondence, `board_hash` matching its phase's zobrist hash, corrections citing
+real messages, and modelling errors like a power holding beliefs about itself or
+messaging itself. **Both must pass for a log to be trustworthy.**
+
+Ten negative fixtures are asserted to be *rejected*, on the same principle as the
+deliberate-leak fixture: a validator that has only ever seen valid input proves
+nothing.
+
+### Decisions embedded in the schema
+
+- **`run.seed` and `run.arm` are required.** D4 is structurally impossible to run
+  wrong — a log that cannot say which arm it belongs to or what seed it used will not
+  validate.
+- **`rules` must not contain `NO_PRESS`.** The library's default rules are
+  `['NO_PRESS', 'POWER_CHOICE']`; a negotiation game must not record itself as
+  no-press. `build_log()` strips it and the schema rejects it.
+- **`message.stated_intent` is structured, not prose.** Without a machine-comparable
+  commitment there is no ground truth for betrayal, and the whole eval collapses into
+  vibes. This is the field the post-adjudication diff reads.
+- **`llm_calls` records prompt hashes, responses and cache-read tokens** so runs
+  replay without hitting the API, and so cost-per-game (§5) is derivable from the
+  artifact rather than measured separately.
+- **`invalid_order_retries`** on each decision — how often the orders-valid gate had
+  to re-prompt is an agent-reliability metric worth having for free.
+
+### F4 — zobrist_hash supersedes the ad-hoc fingerprint
+
+The library exposes `state.zobrist_hash`: a canonical board-position identity,
+verified stable across processes. `replay_fingerprint()` is built from the sequence
+of these rather than the md5-of-repr improvised in §8.
+
+Verified: identical `a876178894f6d1b7…` under `PYTHONHASHSEED` 0, 1 and 12345, and
+sensitive to seed change. This is the primitive that proves two ablation arms played
+the same game.
+
+### F5 — a second volatile field
+`message.time_sent` is volatile in the same way as `state.timestamp` (F1).
+`normalize_volatile()` strips both, plus — under `drop_identity` — the per-instance
+game ids, which differ by construction between two runs of the same seed and would
+otherwise defeat arm-to-arm comparison.
