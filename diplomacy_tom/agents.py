@@ -89,8 +89,19 @@ EVALUATION_TOOL = {
         "additionalProperties": False,
         "required": ["predicted_truthfulness", "confidence", "rationale"],
         "properties": {
-            "predicted_truthfulness": {"type": "number", "minimum": 0, "maximum": 1},
-            "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+            # NOTE: no `minimum`/`maximum` here. Anthropic strict tool use rejects
+            # numeric range keywords ("For 'number' type, properties maximum, minimum
+            # are not supported"), so the bound is stated in the description and
+            # enforced by _unit() on the way in. The schema was never the real
+            # guarantee anyway — a model can always return 1.5.
+            "predicted_truthfulness": {
+                "type": "number",
+                "description": "Probability in [0,1] that this commitment is kept.",
+            },
+            "confidence": {
+                "type": "number",
+                "description": "How much evidence supports the judgement, in [0,1].",
+            },
             "rationale": {"type": "string"},
         },
     },
@@ -175,6 +186,19 @@ def _board_summary(game, power: str) -> str:
 # --------------------------------------------------------------------------
 # Roles
 # --------------------------------------------------------------------------
+
+
+def _unit(value, default: float = 0.5) -> float:
+    """Coerce a model-supplied probability into [0,1].
+
+    Belief maths and the turn-log schema both require the unit interval, and a model
+    that returns 1.5 or "0.8" must not be able to poison the belief store or fail
+    validation three phases later.
+    """
+    try:
+        return max(0.0, min(1.0, float(value)))
+    except (TypeError, ValueError):
+        return default
 
 
 @dataclass
@@ -274,8 +298,12 @@ class BeliefEvaluator:
             max_tokens=1024,
         )
         response = self.router.complete(request)
-        data = response.data or {"predicted_truthfulness": 0.5, "confidence": 0.0,
-                                 "rationale": "no response"}
+        raw = response.data or {}
+        data = {
+            "predicted_truthfulness": _unit(raw.get("predicted_truthfulness"), 0.5),
+            "confidence": _unit(raw.get("confidence"), 0.0),
+            "rationale": str(raw.get("rationale", "") or "")[:2000],
+        }
         return AgentResult(data, request, response)
 
 

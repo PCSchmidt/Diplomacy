@@ -252,11 +252,34 @@ def main() -> int:
             failures.append(f"{p.name} does not satisfy the Provider protocol")
     print(f"    mock / replay / recording all expose complete()")
 
+    # Isolate the environment. This assertion previously passed only because the
+    # machine happened to have no OPENROUTER_API_KEY set — it was testing the
+    # absence of a variable, not the guard. With a key present the constructor
+    # falls back to it and the test silently inverted.
+    import os
+    saved = os.environ.pop("OPENROUTER_API_KEY", None)
     try:
         llm.OpenRouterProvider(api_key="", fetch_pricing=False)
         failures.append("OpenRouter accepted an empty API key")
     except ValueError:
         print("    OpenRouter refuses construction without a key (correct)")
+    finally:
+        if saved is not None:
+            os.environ["OPENROUTER_API_KEY"] = saved
+
+    # And the fallback itself is behaviour worth asserting, not an accident.
+    os.environ["OPENROUTER_API_KEY"] = "test-fallback-key"
+    try:
+        p_fb = llm.OpenRouterProvider(fetch_pricing=False)
+        if p_fb.api_key == "test-fallback-key":
+            print("    OpenRouter picks the key up from the environment (correct)")
+        else:
+            failures.append("OpenRouter did not read OPENROUTER_API_KEY")
+    finally:
+        if saved is not None:
+            os.environ["OPENROUTER_API_KEY"] = saved
+        else:
+            os.environ.pop("OPENROUTER_API_KEY", None)
 
     # --- 11. Anthropic request shape (no network) -----------------------
     # The live path is never exercised by the other checks. A stub client captures

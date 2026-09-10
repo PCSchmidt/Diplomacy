@@ -56,6 +56,9 @@ class ModelSpec:
     cache_read_per_mtok: float | None = None
     supports_caching: bool = False
     supports_adaptive_thinking: bool = False
+    # `effort` is not universal: Haiku 4.5 returns 400 "This model does not support
+    # the effort parameter". Gated per-model rather than sent hopefully.
+    supports_effort: bool = False
 
     def cost_usd(self, input_tokens: int, output_tokens: int, cache_read: int = 0) -> float | None:
         if self.input_per_mtok is None or self.output_per_mtok is None:
@@ -76,15 +79,15 @@ class ModelSpec:
 ANTHROPIC_MODELS: dict[str, ModelSpec] = {
     "claude-opus-5": ModelSpec(
         "claude-opus-5", "anthropic", 5.00, 25.00,
-        supports_caching=True, supports_adaptive_thinking=True,
+        supports_caching=True, supports_adaptive_thinking=True, supports_effort=True,
     ),
     "claude-sonnet-5": ModelSpec(
         "claude-sonnet-5", "anthropic", 2.00, 10.00,
-        supports_caching=True, supports_adaptive_thinking=True,
+        supports_caching=True, supports_adaptive_thinking=True, supports_effort=True,
     ),
     "claude-haiku-4-5": ModelSpec(
         "claude-haiku-4-5", "anthropic", 1.00, 5.00,
-        supports_caching=True, supports_adaptive_thinking=False,
+        supports_caching=True, supports_adaptive_thinking=False, supports_effort=False,
     ),
 }
 
@@ -242,7 +245,7 @@ class AnthropicProvider:
         if request.thinking and spec.supports_adaptive_thinking:
             # budget_tokens is removed on current models -- adaptive replaces it.
             kwargs["thinking"] = {"type": "adaptive"}
-        if request.effort:
+        if request.effort and spec.supports_effort:
             kwargs["output_config"] = {"effort": request.effort}
 
         if request.tool:
@@ -618,6 +621,33 @@ PRESETS: dict[str, dict[str, str]] = {
         "negotiator": "claude-haiku-4-5",
         "belief_evaluator": "claude-sonnet-5",
         "decision": "claude-haiku-4-5",
+    },
+    # Same models reached through OpenRouter, for keys that are not workspace-scoped
+    # on the first-party API. Pricing matches first-party at the time of writing, and
+    # is fetched from OpenRouter rather than assumed.
+    "openrouter-quality": {
+        "negotiator": "anthropic/claude-sonnet-5",
+        "belief_evaluator": "anthropic/claude-sonnet-5",
+        "decision": "anthropic/claude-sonnet-5",
+    },
+    # glm-5.3-flash honours tool-calling and discriminates on the evaluator task at
+    # roughly 15x less than claude-haiku-4.5, which is what makes a multi-game batch
+    # affordable. The evaluator keeps a stronger model, as every preset does: it is
+    # the component under test in D4.
+    "glm": {
+        "negotiator": "z-ai/glm-5.3-flash",
+        "belief_evaluator": "z-ai/glm-5.3-flash",
+        "decision": "z-ai/glm-5.3-flash",
+    },
+    "glm-mixed": {
+        "negotiator": "z-ai/glm-5.3-flash",
+        "belief_evaluator": "anthropic/claude-sonnet-5",
+        "decision": "z-ai/glm-5.3-flash",
+    },
+    "openrouter-cheap": {
+        "negotiator": "anthropic/claude-haiku-4.5",
+        "belief_evaluator": "anthropic/claude-sonnet-5",
+        "decision": "anthropic/claude-haiku-4.5",
     },
 }
 
