@@ -146,7 +146,11 @@ NEGOTIATOR_PREFIX = RULES_PREFIX + """
 You are a negotiator. Draft private messages advancing your power's position.
 Be concrete: name provinces and units. A message that commits to nothing is wasted.
 You may deceive, but remember every order becomes public after adjudication, and
-counterparts remember. Return messages via the send_messages tool."""
+counterparts remember.
+
+BREVITY IS REQUIRED. Write at most 3 messages this phase. Each body must be one or
+two sentences, under 40 words. Do not explain your reasoning, do not restate the
+board, do not write preamble. Return messages via the send_messages tool."""
 
 EVALUATOR_PREFIX = RULES_PREFIX + """
 
@@ -160,7 +164,10 @@ board position?
 
 predicted_truthfulness is the probability it keeps this specific commitment.
 confidence is how much evidence you have. Little history means low confidence, not
-a middling score. Return your judgement via the score_message tool."""
+a middling score.
+
+BREVITY IS REQUIRED. The rationale must be under 30 words: state the decisive
+evidence and stop. Return your judgement via the score_message tool."""
 
 DECIDER_PREFIX = RULES_PREFIX + """
 
@@ -170,6 +177,19 @@ position warrants it -- but list any commitment you are breaking in
 broken_commitments so it is recorded.
 
 Every order must be legal. Choose only from the legal moves supplied.
+
+Diplomacy has three kinds of phase, and they take different orders:
+- Movement (S1901M, F1901M): one order per unit - move, hold, support or convoy.
+- Retreat (S1901R, F1901R): dislodged units retreat or disband.
+- Adjustment (W1901A): BUILD new units in your home centres if you gained centres,
+  or DISBAND if you lost them. These are not moves. You may also be able to do
+  nothing at all, in which case return an empty order list.
+
+The legal-order list supplied below is authoritative for whichever phase this is.
+Copy strings from it verbatim. Never invent an order, never reformat one, and never
+submit a movement order during an adjustment phase.
+
+BREVITY IS REQUIRED. The rationale must be under 25 words.
 Return orders via the submit_orders tool."""
 
 
@@ -236,7 +256,7 @@ class Negotiator:
             messages=[{"role": "user", "content": body}],
             tool=NEGOTIATION_TOOL,
             effort=self.effort,
-            max_tokens=4096,
+            max_tokens=1600,
             mock_hint={
                 "sender": power,
                 "counterparts": [c for c in counterparts if c != power],
@@ -295,7 +315,7 @@ class BeliefEvaluator:
             messages=[{"role": "user", "content": body}],
             tool=EVALUATION_TOOL,
             effort=self.effort,
-            max_tokens=1024,
+            max_tokens=500,
         )
         response = self.router.complete(request)
         raw = response.data or {}
@@ -339,7 +359,7 @@ class OrderDecider:
             messages=[{"role": "user", "content": body}],
             tool=ORDERS_TOOL,
             effort=self.effort,
-            max_tokens=2048,
+            max_tokens=900,
             mock_hint={
                 "legal_orders": legal_here,
                 "trust": {k: v["trust"] for k, v in beliefs.items()},

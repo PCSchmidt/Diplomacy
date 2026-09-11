@@ -252,10 +252,16 @@ class GameRunner:
             if invalid:
                 retries = 1
                 orders = [o for o in orders if o in flat_legal]
-            # A power that produced nothing usable still needs legal orders, or the
-            # adjudicator silently treats it as civil disorder and the game drifts
-            # for reasons unrelated to the belief layer.
-            if not orders:
+            # An empty order list is CORRECT when a power has nothing orderable --
+            # an adjustment phase where it neither gained nor lost centres, say.
+            # Counting that as a failed decision made invalid_order_retries report
+            # reliability problems that did not happen, which is worse than not
+            # measuring it at all.
+            orderable = engine.orderable_locations(self.game, power)
+            if not orders and orderable:
+                # It had something to order and produced nothing usable. Fall back,
+                # or the adjudicator treats it as civil disorder and the game drifts
+                # for reasons unrelated to the belief layer.
                 orders = bots.get_policy("hold").orders(self.game, power, self.rng)
                 if use_llm:
                     retries += 1
