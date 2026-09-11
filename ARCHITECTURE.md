@@ -956,17 +956,23 @@ Report: `reports/ablation-7power.md`, logs in `runs/haiku7/`.
 This is the first run where the measurement itself is sound. §15's result is
 superseded, not merely withdrawn.
 
+> **Correction (see end of this section):** the AUC/CI/calibration figures originally
+> recorded here (0.4993, n=747, CI [0.458, 0.541]) were computed from an unpaired
+> glob over `belief_on-*.json` that included an orphaned seed whose `belief_off`
+> partner failed — not from the 10 properly matched pairs the report above describes.
+> The conclusion is unchanged; the exact figures were wrong and are corrected below.
+
 ### The headline: the evaluator has no discriminative signal
 
-| | first run (broken) | this run |
+| | first run (broken) | this run (10 matched pairs) |
 | --- | --- | --- |
-| n (falsifiable, scored) | 89 | **747** |
-| Evaluator AUC | 0.470 | **0.4993** |
-| 95% CI | [0.321, 0.616] | **[0.458, 0.541]** |
-| CI width | 0.295 | **0.083** |
+| n (falsifiable, scored) | 89 | **667** |
+| Evaluator AUC | 0.470 | **0.497** |
+| 95% CI | [0.321, 0.616] | **[0.453, 0.542]** |
+| CI width | 0.295 | **0.089** |
 
 0.5 sits almost exactly at the centre of a tight interval. This is no longer
-"underpowered, cannot tell" — it rules out any effect larger than about ±0.04.
+"underpowered, cannot tell" — it rules out any effect larger than about ±0.05.
 **Ranked by the evaluator's predicted truthfulness, kept promises do not sort above
 broken ones.**
 
@@ -974,11 +980,11 @@ broken ones.**
 
 | predicted band | n | said | actually kept | gap |
 | --- | --- | --- | --- | --- |
-| 0.0–0.2 | 60 | 0.148 | **0.800** | **+0.652** |
-| 0.2–0.4 | 160 | 0.294 | 0.619 | +0.324 |
-| 0.4–0.6 | 42 | 0.486 | 0.619 | +0.133 |
-| 0.6–0.8 | 345 | 0.715 | 0.626 | −0.088 |
-| 0.8–1.0 | 140 | 0.870 | 0.707 | −0.162 |
+| 0.0–0.2 | 51 | 0.148 | **0.804** | **+0.656** |
+| 0.2–0.4 | 146 | 0.295 | 0.610 | +0.315 |
+| 0.4–0.6 | 39 | 0.484 | 0.615 | +0.131 |
+| 0.6–0.8 | 313 | 0.713 | 0.626 | −0.087 |
+| 0.8–1.0 | 118 | 0.872 | 0.686 | −0.186 |
 
 The evaluator's **confident predictions are backwards**. When it says a promise has a
 15% chance of being kept, it is kept **80%** of the time. The base rate is 0.65, and
@@ -1000,13 +1006,39 @@ meaningless-positive the harness was built to refuse.
 belief layer produces trust scores uncorrelated with whether promises are kept. The
 ToM claim is **not supported**.
 
-**Does not establish:** that the approach cannot work. Untested alternatives include
-a stronger evaluator model (haiku-4.5 is the cheapest tier), richer evidence in the
-evaluator's context (it currently sees message text and order history, not board
-pressure), longer games (8 phases is short for reputations to form), and better
+**Does not establish:** that the approach cannot work. Untested alternatives at the
+time of this run included a stronger evaluator model (haiku-4.5 is the cheapest
+tier), richer opportunity evidence in the evaluator's context (it saw message text
+and order history, not board pressure — fixed afterward, §20, and not yet re-run as a
+batch), longer games (8 phases is short for reputations to form), and better
 commitment extraction (58% are still discarded as unfalsifiable).
 
 The honest one-line summary: **the machinery is sound and the result is negative.**
+
+### Correction to this section's headline figures
+
+The AUC/CI/calibration numbers first recorded here (AUC 0.4993, n=747, CI
+[0.458, 0.541]) were wrong, caught while restructuring the README to point at a
+verifiable command. They came from a follow-up confidence-interval calculation that
+globbed `belief_on-*.json` directly rather than intersecting on seeds present in
+*both* arms — so it silently included the `belief_on` half of an orphaned pair
+whose `belief_off` partner had failed (§19's own text, two paragraphs up, already
+said the correct method drops orphans; the CI script just didn't do what the prose
+described).
+
+The committed, machine-generated `reports/ablation-7power.md` — produced by
+`batch.run_batch()`'s own pairing logic, not a hand-rolled recompute — was correct
+throughout: **AUC 0.497, n=667.** The table above and the calibration table now match
+it exactly and are reproducible by loading `runs/haiku7/belief_{on,off}-*.json`,
+intersecting on seed, and computing AUC only over that intersection — see the README
+[Verify the claims](README.md#verify-the-claims) section for a command that does
+this correctly rather than trusting a rewritten one-liner again.
+
+The qualitative conclusion does not change — 0.5 sits inside a tight interval either
+way — which is exactly why the wrong figures went unnoticed for as long as they did.
+A number that is wrong but still says "chance" is easy to not double-check. Recorded
+here rather than silently corrected, on the same principle as every other finding in
+this document.
 
 ### F12 — `strict` is not enforced end to end
 
@@ -1042,7 +1074,7 @@ change.
 
 ## 20. Free architectural fix: opportunity, not just position
 
-Investigated whether a bigger/smarter evaluator model would resolve the AUC 0.4993
+Investigated whether a bigger/smarter evaluator model would resolve the AUC 0.497
 result before spending anything (a "top-10 leaderboard" model was proposed). Answer:
 plausibly partial, not guaranteed, because leaderboard rank predicts general
 reasoning capability, not calibration on this specific structured task — and half of
