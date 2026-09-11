@@ -237,6 +237,8 @@ class GameRunner:
                 )
                 self._record(result, phase)
                 orders = list(result.data.get("orders", []) or [])
+                if not result.tool_called:
+                    entry["no_decision"] = True
                 if result.data.get("rationale"):
                     entry["rationale"] = result.data["rationale"]
                 if result.data.get("broken_commitments"):

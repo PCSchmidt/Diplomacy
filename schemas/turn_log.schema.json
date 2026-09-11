@@ -529,6 +529,10 @@
           "description": "How often the orders-valid gate re-prompted. An agent-reliability metric in its own right.",
           "type": "integer",
           "minimum": 0
+        },
+        "no_decision": {
+          "description": "True when the model produced no parseable tool call and the runner substituted hold orders. This power did not actually play this phase. Kept distinct from invalid_order_retries: producing bad orders and producing nothing are different failures, and conflating them hid the fact that a third of 'LLM decisions' were not decisions at all.",
+          "type": "boolean"
         }
       }
     },

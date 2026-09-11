@@ -228,6 +228,7 @@ class AgentResult:
     data: dict
     request: LLMRequest
     response: LLMResponse
+    tool_called: bool = True     # False when the model answered in prose instead
 
 
 class Negotiator:
@@ -366,4 +367,23 @@ class OrderDecider:
             },
         )
         response = self.router.complete(request)
-        return AgentResult(response.data or {"orders": []}, request, response)
+        if response.data is None:
+            # The model wrote prose instead of calling the tool -- typically
+            # "Let me analyze the situation..." until it hit max_tokens. One terse
+            # retry, then give up loudly rather than pretending it held.
+            retry = LLMRequest(
+                role=self.role,
+                cacheable_system=DECIDER_PREFIX,
+                system="Respond ONLY by calling submit_orders. Do not write any "
+                       "analysis, preamble or explanation before the call.",
+                messages=request.messages,
+                tool=ORDERS_TOOL,
+                effort=self.effort,
+                max_tokens=request.max_tokens,
+                mock_hint=request.mock_hint,
+            )
+            response = self.router.complete(retry)
+            request = retry
+        if response.data is None:
+            return AgentResult({"orders": []}, request, response, tool_called=False)
+        return AgentResult(response.data, request, response, tool_called=True)
