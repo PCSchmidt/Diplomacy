@@ -111,3 +111,46 @@ def occupies(game, power: str, province: str) -> bool:
     target = province.split("/")[0].upper()
     return any(u.split()[-1].split("/")[0].upper() == target
                for u in game.get_units(power))
+
+
+def commitment_pressure(game, subject: str, province: str) -> dict:
+    """What a human Diplomacy player would actually use to judge this promise.
+
+    The evaluator previously saw raw units/centers but nothing computed about
+    OPPORTUNITY: is breaking this specific pledge currently tempting? A promise not
+    to enter a contested, valuable, reachable province is a real test of character;
+    the same promise about a province nobody wants is not. Missing this distinction
+    is one of the two architectural gaps identified after the AUC-0.4993 result
+    (ARCHITECTURE.md section 19) -- the other, game length, is not a per-call fix.
+
+    Kept deliberately legible rather than a full 2-ply lookahead: whether OTHER
+    powers could also move there this turn is a real but crude proxy for contest,
+    not a support-resolved prediction of who would actually win it.
+    """
+    target = province.split("/")[0].upper()
+    scs = {s.upper() for s in game.map.scs}
+    is_sc = target in scs
+
+    owner = None
+    for power in powers_in_order(game):
+        if target in {c.split("/")[0].upper() for c in game.get_centers(power)}:
+            owner = power
+            break
+
+    reachable = can_reach(game, subject, target)
+
+    rival_can_also_reach = any(
+        can_reach(game, other, target)
+        for other in powers_in_order(game) if other != subject
+    )
+
+    return {
+        "province": target,
+        "is_supply_center": is_sc,
+        "current_owner": owner,
+        "subject_could_take_it_now": reachable,
+        "another_power_could_also_move_there": rival_can_also_reach,
+        "would_be_a_free_gain": (
+            is_sc and owner != subject and reachable and not rival_can_also_reach
+        ),
+    }

@@ -6,7 +6,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 GATES = ["tests/test_smoke.py", "tests/test_turn_log.py",
          "tests/test_belief.py", "tests/test_runner.py",
-         "tests/test_phase2.py", "tests/test_eval.py"]
+         "tests/test_phase2.py", "tests/test_eval.py",
+         "tests/test_pressure.py"]
 
 def main() -> int:
     failed = []

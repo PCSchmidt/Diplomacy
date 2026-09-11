@@ -1037,3 +1037,48 @@ the finding rather than the engineering, which was never the point.
 Anyone who wants to spend the $60 has exactly what they need to do it: the routing
 preset, the batch command, and the eval harness all take a model swap as a one-line
 change.
+
+---
+
+## 20. Free architectural fix: opportunity, not just position
+
+Investigated whether a bigger/smarter evaluator model would resolve the AUC 0.4993
+result before spending anything (a "top-10 leaderboard" model was proposed). Answer:
+plausibly partial, not guaranteed, because leaderboard rank predicts general
+reasoning capability, not calibration on this specific structured task — and half of
+the four candidate causes in section 19 (missing board context, short games) are
+architectural, not fixable by a bigger model at all. Testing a frontier model against
+the same impoverished context would be an uninformative experiment: a null result
+couldn't distinguish "the approach doesn't work" from "the evaluator still can't see
+the board."
+
+So the free one first. `engine.commitment_pressure(game, subject, province)` computes,
+for each pledged province, what a human player would actually use to judge a promise:
+is it a supply centre, who owns it, can the subject reach it this turn, could a rival
+also contest it, and — the composite signal — would breaking the promise be an
+uncontested free gain. This is wired into the evaluator's prompt and its instructions
+now explicitly say to weigh computed opportunity above message wording: a pledge with
+a real capture available is a genuine test of character; a pledge about an
+unreachable or contested province is nearly unfalsifiable and should sit near the
+prior regardless of how sincere it sounds.
+
+All public board information — no isolation concern, verified by the same fixture
+discipline as F7: `commitment_pressure` is tested against known 1901 positions rather
+than trusted on inspection, and the evaluator prompt is asserted to actually contain
+the computed data, not just callable in isolation.
+
+**A one-call live smoke test shows the model engaging with the new variable
+correctly**, which is necessary but not sufficient — it is not evidence the AUC
+moves, only evidence the mechanism reaches the model as intended:
+
+> *"NTH uncontested but not a free gain — no supply centre... No opportunity cost
+> makes promise weakly testable."*
+>
+> *"Sevastopol is geographically distant... commitment is nearly unfalsifiable but
+> requires no sacrifice."*
+
+**Not yet re-run as a batch.** This closes one of the two architectural gaps from
+section 19 (missing opportunity context); the other (8-phase games being short for
+reputations to form) is untouched. Whether AUC moves at all requires the same paired,
+seeded, well-powered batch discipline as section 19 — a small-n positive here would
+be exactly the kind of unreliable signal this project exists to catch, not evidence.

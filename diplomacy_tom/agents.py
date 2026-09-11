@@ -181,6 +181,13 @@ you must not speculate about them. Judge the counterpart on its own record alone
 does this message fit what it has actually done, and is it plausible given its
 board position?
 
+A promise costs nothing to make and nothing to keep when there is no temptation to
+break it. Weigh the computed opportunity data above the message text: a pledge with
+a concrete, uncontested capture available (would_be_a_free_gain) is a real test --
+low truthfulness is warranted unless their record says otherwise. A pledge about a
+province with no opportunity is nearly unfalsifiable and should sit near your prior
+regardless of how sincere the wording sounds.
+
 predicted_truthfulness is the probability it keeps this specific commitment.
 confidence is how much evidence you have. Little history means low confidence, not
 a middling score.
@@ -345,11 +352,21 @@ class BeliefEvaluator:
         self.effort = effort
 
     def score(self, game, observer: str, subject: str, message: dict, store) -> AgentResult:
+        # What a human player would actually use to judge this: is breaking THIS
+        # pledge currently tempting? Computed per pledged province rather than left
+        # for the model to infer from raw units/centers alone.
+        pressure = [
+            engine.commitment_pressure(game, subject, prov)
+            for intent in (message.get("stated_intent") or [])
+            for prov in (intent.get("concerns_provinces") or [])
+        ]
         body = (
             f"Power under judgement: {subject}\n\n"
             f"Their message just now:\n{json.dumps(message.get('body', ''))}\n\n"
             f"Their stated commitment:\n"
             f"{json.dumps(message.get('stated_intent', []), sort_keys=True)}\n\n"
+            f"Concrete opportunity to break it, computed from the board (not their "
+            f"claim):\n{json.dumps(pressure, sort_keys=True, indent=1)}\n\n"
             f"Their record with you:\n"
             f"{json.dumps(evaluator_context(store, subject), sort_keys=True, indent=1)}\n\n"
             f"Board:\n{_board_summary(game, subject)}"
