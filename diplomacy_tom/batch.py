@@ -14,7 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 from . import evaluation as ev
@@ -39,13 +39,25 @@ def _make_provider(name: str, routing: str):
 
 
 def run_one(args: tuple) -> dict:
-    seed, arm, max_phases, use_llm, provider_name, routing = args
+    """Run one game and persist it immediately.
+
+    The log is written inside the worker rather than by the parent at the end. A
+    batch is hours of paid API calls, and losing all of it to one transient failure
+    in the final game is not an acceptable failure mode -- which is exactly what
+    happened before this changed.
+    """
+    seed, arm, max_phases, use_llm, provider_name, routing, out_dir = args
     provider = _make_provider(provider_name, routing) if use_llm else None
     cfg = GameConfig(
         seed=seed, arm=arm, max_phases=max_phases,
         use_llm=use_llm, routing=routing, provider=provider,
     )
-    return GameRunner(cfg).run()
+    log = GameRunner(cfg).run()
+    if out_dir:
+        out = Path(out_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        tl.save(log, out / f"{arm}-{seed}.json")
+    return log
 
 
 def run_batch(
@@ -63,32 +75,53 @@ def run_batch(
     """Run both arms across `games` matched seeds and return the comparison."""
     seeds = [seed0 + i for i in range(games)]
     jobs = [
-        (s, arm, max_phases, use_llm, provider, routing)
+        (s, arm, max_phases, use_llm, provider, routing, str(out_dir) if out_dir else None)
         for s in seeds for arm in ("belief_on", "belief_off")
     ]
 
     results: list[dict] = []
+    failures: list[str] = []
+
     if workers > 1:
-        # Live providers are I/O-bound, so processes buy little beyond isolation;
-        # the real reason for them is that each worker builds its own client.
+        # as_completed, not map: map raises on the first failed future and discards
+        # everything. One timeout must not destroy a batch.
         with ProcessPoolExecutor(max_workers=workers) as pool:
-            for i, log in enumerate(pool.map(run_one, jobs), 1):
-                results.append(log)
-                progress(f"  {i}/{len(jobs)} games")
+            futures = {pool.submit(run_one, j): j for j in jobs}
+            for i, fut in enumerate(as_completed(futures), 1):
+                seed, arm = futures[fut][0], futures[fut][1]
+                try:
+                    results.append(fut.result())
+                    progress(f"  {i}/{len(jobs)}  ok   seed={seed} {arm}")
+                except Exception as exc:
+                    failures.append(f"seed={seed} {arm}: {type(exc).__name__}: {exc}")
+                    progress(f"  {i}/{len(jobs)}  FAIL seed={seed} {arm}: "
+                             f"{type(exc).__name__}")
     else:
         for i, job in enumerate(jobs, 1):
-            results.append(run_one(job))
-            progress(f"  {i}/{len(jobs)} games  (seed {job[0]}, {job[1]})")
-
-    if out_dir:
-        out = Path(out_dir)
-        out.mkdir(parents=True, exist_ok=True)
-        for log in results:
-            tl.save(log, out / f"{log['run']['arm']}-{log['run']['seed']}.json")
-        progress(f"  wrote {len(results)} logs to {out}")
+            try:
+                results.append(run_one(job))
+                progress(f"  {i}/{len(jobs)}  ok   seed={job[0]} {job[1]}")
+            except Exception as exc:
+                failures.append(f"seed={job[0]} {job[1]}: {type(exc).__name__}: {exc}")
+                progress(f"  {i}/{len(jobs)}  FAIL seed={job[0]} {job[1]}")
 
     on = [g for g in results if g["run"]["arm"] == "belief_on"]
     off = [g for g in results if g["run"]["arm"] == "belief_off"]
+
+    # Unpaired seeds break the matched-seed design, so drop any seed missing an arm
+    # rather than silently comparing different games.
+    paired = {g["run"]["seed"] for g in on} & {g["run"]["seed"] for g in off}
+    dropped = (len(on) + len(off)) - 2 * len(paired)
+    if dropped:
+        progress(f"  dropping {dropped} unpaired game(s) - matched seeds only")
+    on = [g for g in on if g["run"]["seed"] in paired]
+    off = [g for g in off if g["run"]["seed"] in paired]
+
+    if failures:
+        progress(f"  {len(failures)} game(s) failed:")
+        for f in failures[:5]:
+            progress(f"    {f}")
+
     return ev.compare(on, off)
 
 

@@ -27,6 +27,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -318,23 +319,45 @@ class OpenRouterProvider:
                 # Cost accounting degrades to None rather than blocking a run.
                 pass
 
+    # A long batch will hit transient failures; without retries, one slow response
+    # destroys hours of completed work. Retried: timeouts, connection resets, 429
+    # and 5xx. Not retried: 4xx, which will fail identically however many times it
+    # is sent.
+    TIMEOUT_S = 300
+    MAX_ATTEMPTS = 4
+    RETRY_STATUS = {408, 409, 429, 500, 502, 503, 504}
+
     def _post(self, path: str, payload: dict) -> dict:
-        req = urllib.request.Request(
-            f"{self.BASE}{path}",
-            data=json.dumps(payload).encode(),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(req, timeout=180) as resp:
-                return json.loads(resp.read())
-        except urllib.error.HTTPError as exc:
-            raise RuntimeError(
-                f"OpenRouter {exc.code}: {exc.read().decode()[:400]}"
-            ) from exc
+        body = json.dumps(payload).encode()
+        last: Exception | None = None
+
+        for attempt in range(self.MAX_ATTEMPTS):
+            req = urllib.request.Request(
+                f"{self.BASE}{path}",
+                data=body,
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=self.TIMEOUT_S) as resp:
+                    return json.loads(resp.read())
+            except urllib.error.HTTPError as exc:
+                detail = exc.read().decode()[:400]
+                if exc.code not in self.RETRY_STATUS:
+                    raise RuntimeError(f"OpenRouter {exc.code}: {detail}") from exc
+                last = RuntimeError(f"OpenRouter {exc.code}: {detail}")
+            except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                last = exc
+
+            if attempt < self.MAX_ATTEMPTS - 1:
+                time.sleep(min(2 ** attempt * 2, 20))
+
+        raise RuntimeError(
+            f"OpenRouter failed after {self.MAX_ATTEMPTS} attempts: {last}"
+        ) from last
 
     def load_pricing(self) -> int:
         """Populate the registry from OpenRouter's own catalogue.
