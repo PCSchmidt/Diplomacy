@@ -1,0 +1,133 @@
+{
+  "is_evidence": true,
+  "belief_on": {
+    "arm": "belief_on",
+    "games": 6,
+    "synthetic": false,
+    "providers": [
+      "openrouter"
+    ],
+    "messages": 348,
+    "resolved": 89,
+    "broken": 16,
+    "evaluator_auc": 0.4696061643835616,
+    "evaluator_brier": 0.2275348314606742,
+    "calibration": [
+      {
+        "lo": 0.0,
+        "hi": 0.2,
+        "n": 0,
+        "predicted": null,
+        "actual": null
+      },
+      {
+        "lo": 0.2,
+        "hi": 0.4,
+        "n": 8,
+        "predicted": 0.3187,
+        "actual": 1.0
+      },
+      {
+        "lo": 0.4,
+        "hi": 0.6,
+        "n": 40,
+        "predicted": 0.5037,
+        "actual": 0.775
+      },
+      {
+        "lo": 0.6,
+        "hi": 0.8,
+        "n": 31,
+        "predicted": 0.6923,
+        "actual": 0.871
+      },
+      {
+        "lo": 0.8,
+        "hi": 1.0,
+        "n": 10,
+        "predicted": 0.82,
+        "actual": 0.7
+      }
+    ],
+    "trust_brier": 0.24410365701053932,
+    "betrayals": 16,
+    "mean_lead": 0.188,
+    "anticipated": 1,
+    "alliance_spans": 1,
+    "mean_alliance_span": 1.0,
+    "cost": {
+      "calls": 732,
+      "input_tokens": 1724534,
+      "output_tokens": 362557,
+      "cache_read_tokens": 0,
+      "cost_usd": 0.439958,
+      "cache_hit_rate": 0.0,
+      "cost_per_game": 0.073326
+    }
+  },
+  "belief_off": {
+    "arm": "belief_off",
+    "games": 6,
+    "synthetic": false,
+    "providers": [
+      "openrouter"
+    ],
+    "messages": 294,
+    "resolved": 28,
+    "broken": 6,
+    "evaluator_auc": 0.42803030303030304,
+    "evaluator_brier": 0.27625,
+    "calibration": [
+      {
+        "lo": 0.0,
+        "hi": 0.2,
+        "n": 1,
+        "predicted": 0.15,
+        "actual": 1.0
+      },
+      {
+        "lo": 0.2,
+        "hi": 0.4,
+        "n": 2,
+        "predicted": 0.25,
+        "actual": 1.0
+      },
+      {
+        "lo": 0.4,
+        "hi": 0.6,
+        "n": 17,
+        "predicted": 0.5059,
+        "actual": 0.7647
+      },
+      {
+        "lo": 0.6,
+        "hi": 0.8,
+        "n": 8,
+        "predicted": 0.6438,
+        "actual": 0.75
+      },
+      {
+        "lo": 0.8,
+        "hi": 1.0,
+        "n": 0,
+        "predicted": null,
+        "actual": null
+      }
+    ],
+    "trust_brier": null,
+    "betrayals": 6,
+    "mean_lead": 0.0,
+    "anticipated": 0,
+    "alliance_spans": 0,
+    "mean_alliance_span": null,
+    "cost": {
+      "calls": 678,
+      "input_tokens": 896478,
+      "output_tokens": 338610,
+      "cache_read_tokens": 0,
+      "cost_usd": 0.303778,
+      "cache_hit_rate": 0.0,
+      "cost_per_game": 0.05063
+    }
+  }
+}

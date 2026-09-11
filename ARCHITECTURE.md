@@ -161,7 +161,8 @@ Each ends in something showable.
 - [x] Batch runner, matched seeds across both arms
 - [x] Calibration, betrayal lead time, alliance stability, cost per game
 - [x] Metrics verified against known inputs
-- [ ] **Run it against a real model** — blocked on credentials
+- [x] Run it against a real model — **done, result is negative (§15)**
+- [ ] Fix the ground-truth validity problem, then re-run
 
 ### Phase 5 — Funnel
 - Restructure `projects.astro`: one hero (Diplomacy, live embedded artifact), three
@@ -668,3 +669,73 @@ header. The first version of that check flagged `board.js` for containing the wo
 match the asset rather than the word, for the same reason as F7: a check loose enough
 to flag its own documentation is a check people learn to ignore. Both directions are
 tested with a planted fixture.
+
+
+---
+
+## 15. First live ablation — a negative result, and why it is the useful kind
+
+6 seeds x 2 arms, 8 phases, `z-ai/glm-5.3-flash` via OpenRouter. 12/12 games
+completed, $0.07/game. Report: `reports/ablation.md`, logs in `runs/glm/`.
+
+### The headline
+
+**Evaluator AUC 0.470, 95% CI [0.321, 0.616].** 0.5 sits comfortably inside that
+interval, so the honest statement is **no detectable signal in either direction** —
+not "the evaluator is inverted". With 89 resolved messages and only 16 negatives this
+run is badly underpowered, and the interval says so.
+
+Betrayal anticipation is similarly empty: 1 of 16 betrayals had any lead, mean lead
+0.19 phases. On these numbers the belief layer is a scoreboard, not a predictor.
+
+### But the measurement is broken, so the model is not what was tested
+
+Three facts, in order of how much they matter:
+
+| | |
+|---|---|
+| Base rate of "kept" | **82%** (73/89) |
+| Pledged province **not occupied** by the promiser | **77 of 89** |
+| Contested subset (promiser had a unit there) | **12 cases, 12 kept, AUC undefined** |
+
+Almost every commitment was of the form *"I will not move on X"* where X was
+somewhere the promiser had no unit and no intention of going. **A promise not to
+enter the English Channel when you have no fleet that can reach it is kept by
+default.** The label is satisfied trivially, carries no information, and scoring a
+predictor against it measures noise.
+
+The contested subset — the only place where "kept" is informative — contains twelve
+cases and zero violations, so AUC is undefined rather than bad.
+
+**Conclusion: this run does not show the belief layer fails. It shows the ground
+truth is invalid.** Those are very different findings, and reporting the first when
+the second is true would have been the most damaging thing this project could
+publish: a confident number resting on a label that means nothing.
+
+### A confound worth naming separately
+
+`belief_on` resolved 89 messages, `belief_off` only 28. The arms produced very
+different volumes of negotiation traffic, so even a clean metric would not be
+comparing like with like. Matched seeds control the *board*, not the amount of talk.
+
+### What has to change before re-running
+
+1. **Score only falsifiable commitments.** A promise counts as evidence only when the
+   promiser could actually have broken it — a unit in or adjacent to the pledged
+   province. Everything else is excluded from the metric, not counted as "kept".
+2. **Elicit checkable commitments.** The negotiator prompt should require promises
+   about provinces the speaker can actually reach this turn.
+3. **Longer games.** Eight phases is not enough for trust to develop or for a stab to
+   become attractive.
+4. **More games.** The CI above is the argument: n=89 with 16 negatives cannot resolve
+   an effect of any plausible size. At $0.07/game, 50 seeds per arm is affordable.
+5. **Control the traffic confound**, or report per-message rather than per-game.
+
+### Why this is recorded rather than quietly fixed
+
+The eval harness did its job. It was built to answer "does the belief layer do
+anything?", and the first thing it did was refuse to let a meaningless positive
+through — the calibration table exposed an 82% base rate and the contested-subset
+check found twelve unanimous cases. A harness that had only reported AUC would have
+printed 0.470 and looked like a modest failure of the model, and the real defect
+would have survived into the next run.

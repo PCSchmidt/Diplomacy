@@ -9,10 +9,17 @@ modelling can be built as **engineering rather than prompting**: recursive belie
 state, calibrated trust, and mechanically enforced information isolation, with
 falsifiable evidence that the belief layer does something.
 
-> **Status: Phase 3 of 5.** The engine, belief layer, LLM agents and replay viewer
-> work end to end. Every gate is green in CI. What is *not* done is the part that
-> matters most — the ablation and calibration metrics (Phase 4). See
-> [ARCHITECTURE.md](ARCHITECTURE.md) for the plan and every decision behind it.
+> **Status: Phase 4, first live ablation run — negative result.** The engine, belief
+> layer, LLM agents, eval harness and replay viewer all work end to end, on real
+> models, with seven gates green in CI.
+>
+> **The central claim is not established.** The first live run scored evaluator
+> AUC 0.470 (95% CI [0.321, 0.616]) — no detectable signal. Diagnosis showed the
+> *measurement* is at fault, not necessarily the model: 82% of commitments were
+> trivially kept because they pledged not to enter provinces the promiser could not
+> reach. See [ARCHITECTURE.md §15](ARCHITECTURE.md) for the full write-up and the
+> fix. I would rather publish this than a confident number resting on a meaningless
+> label.
 
 ---
 
