@@ -192,6 +192,12 @@ class GameRunner:
                     self.game, recipient, sender, message, self.stores[recipient]
                 )
                 self._record(scored, phase)
+                if not scored.tool_called:
+                    # No evaluation is honest; a default 0.5 is not. An unscored
+                    # message is simply excluded from the eval rather than
+                    # contributing a constant that looks like a prediction.
+                    messages.append(message)
+                    continue
                 message["evaluation"] = {
                     "predicted_truthfulness": float(
                         scored.data.get("predicted_truthfulness", 0.5)

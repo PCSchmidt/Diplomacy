@@ -141,7 +141,14 @@ Rules that matter here:
 You negotiate in private, bilateral channels. Other powers cannot see what you say
 to anyone else, and you cannot see what they say to each other."""
 
-NEGOTIATOR_PREFIX = RULES_PREFIX + """
+NEGOTIATOR_PREFIX = """OUTPUT CONTRACT - THIS OVERRIDES EVERYTHING BELOW.
+
+Your entire response must be a single send_messages tool call. Do not narrate your
+reasoning, do not write analysis, do not write any text before or after the call.
+Think silently, then emit the call. Prose outside the tool call is a failure.
+
+---
+""" + RULES_PREFIX + """
 
 You are a negotiator. Draft private messages advancing your power's position.
 Be concrete: name provinces and units. A message that commits to nothing is wasted.
@@ -152,7 +159,14 @@ BREVITY IS REQUIRED. Write at most 3 messages this phase. Each body must be one 
 two sentences, under 40 words. Do not explain your reasoning, do not restate the
 board, do not write preamble. Return messages via the send_messages tool."""
 
-EVALUATOR_PREFIX = RULES_PREFIX + """
+EVALUATOR_PREFIX = """OUTPUT CONTRACT - THIS OVERRIDES EVERYTHING BELOW.
+
+Your entire response must be a single score_message tool call. Do not narrate your
+reasoning, do not write analysis, do not write any text before or after the call.
+Think silently, then emit the call. Prose outside the tool call is a failure.
+
+---
+""" + RULES_PREFIX + """
 
 You are a belief evaluator. You judge whether a power will do what it says.
 
@@ -169,7 +183,14 @@ a middling score.
 BREVITY IS REQUIRED. The rationale must be under 30 words: state the decisive
 evidence and stop. Return your judgement via the score_message tool."""
 
-DECIDER_PREFIX = RULES_PREFIX + """
+DECIDER_PREFIX = """OUTPUT CONTRACT - THIS OVERRIDES EVERYTHING BELOW.
+
+Your entire response must be a single submit_orders tool call. Do not narrate your
+reasoning, do not write analysis, do not write any text before or after the call.
+Think silently, then emit the call. Prose outside the tool call is a failure.
+
+---
+""" + RULES_PREFIX + """
 
 You choose orders. Weigh board position against what you believe other powers will
 do. You are not obliged to honour commitments -- betrayal is legitimate when the
@@ -206,6 +227,17 @@ def _board_summary(game, power: str) -> str:
 # --------------------------------------------------------------------------
 # Roles
 # --------------------------------------------------------------------------
+
+
+def _no_orders(data) -> bool:
+    """True when the model did not actually submit orders.
+
+    Checking `data is None` is not enough: a model that answers in prose can still
+    come back as an empty dict, which is not None, so the guard never fired and the
+    non-decision was silently converted into a hold. Absence of the `orders` key is
+    the real signal.
+    """
+    return not isinstance(data, dict) or "orders" not in data
 
 
 def _unit(value, default: float = 0.5) -> float:
@@ -265,7 +297,10 @@ class Negotiator:
             },
         )
         response = self.router.complete(request)
-        return AgentResult(response.data or {"messages": []}, request, response)
+        raw = response.data if isinstance(response.data, dict) else {}
+        if "messages" not in raw:
+            return AgentResult({"messages": []}, request, response, tool_called=False)
+        return AgentResult(raw, request, response, tool_called=True)
 
 
 def evaluator_context(store, subject: str) -> dict:
@@ -319,13 +354,19 @@ class BeliefEvaluator:
             max_tokens=500,
         )
         response = self.router.complete(request)
-        raw = response.data or {}
+        raw = response.data if isinstance(response.data, dict) else {}
+        called = "predicted_truthfulness" in raw
+        if not called:
+            # Substituting 0.5/0.0 here is what made 47% of one run's "evaluator
+            # scores" constants rather than model output, while looking entirely
+            # plausible in the log. The caller is told instead.
+            return AgentResult({}, request, response, tool_called=False)
         data = {
             "predicted_truthfulness": _unit(raw.get("predicted_truthfulness"), 0.5),
             "confidence": _unit(raw.get("confidence"), 0.0),
             "rationale": str(raw.get("rationale", "") or "")[:2000],
         }
-        return AgentResult(data, request, response)
+        return AgentResult(data, request, response, tool_called=True)
 
 
 class OrderDecider:
@@ -367,7 +408,7 @@ class OrderDecider:
             },
         )
         response = self.router.complete(request)
-        if response.data is None:
+        if _no_orders(response.data):
             # The model wrote prose instead of calling the tool -- typically
             # "Let me analyze the situation..." until it hit max_tokens. One terse
             # retry, then give up loudly rather than pretending it held.
@@ -384,6 +425,6 @@ class OrderDecider:
             )
             response = self.router.complete(retry)
             request = retry
-        if response.data is None:
+        if _no_orders(response.data):
             return AgentResult({"orders": []}, request, response, tool_called=False)
         return AgentResult(response.data, request, response, tool_called=True)
