@@ -739,3 +739,92 @@ through — the calibration table exposed an 82% base rate and the contested-sub
 check found twelve unanimous cases. A harness that had only reported AUC would have
 printed 0.470 and looked like a modest failure of the model, and the real defect
 would have survived into the next run.
+
+
+---
+
+## 16. Model selection: why the cheap model was not cheaper
+
+A worked example of a measurement trap, kept in full because the wrong answer was
+defensible at every step.
+
+### The claim under test
+
+`z-ai/glm-5.3-flash` costs $0.15/$0.50 per MTok against `claude-haiku-4.5` at
+$1.00/$5.00 — nominally **10x cheaper**. Running tens of games makes that difference
+decisive, so it was adopted for the first live batch.
+
+### What went wrong
+
+A third of LLM "decisions" in that batch were not decisions. The model wrote prose —
+*"Let me analyze the situation..."* — until it hit `max_tokens`, and never emitted the
+tool call. The runner substituted hold orders.
+
+My first diagnosis was **"the cheap model cannot do forced tool calls."** That was
+wrong, and reached badly. I ran an A/B test where the improved prompt *replaced* the
+whole prefix, including the phase guidance added earlier — two changes at once. It
+scored worse, I attributed the failure to the model, and stopped.
+
+Prepending the output contract to the existing prompt instead gave **8/8** on the
+position I happened to test. The verbosity was mine: `DECIDER_PREFIX` opened with
+*"Weigh board position against what you believe other powers will do"* and mentioned
+the tool only at the end. **The model did exactly what it was told.**
+
+### But one position is not a measurement
+
+Re-run across four positions at different game stages:
+
+| Model | decisions | evaluations | $/success | s/success |
+| --- | --- | --- | --- | --- |
+| glm-5.3-flash | **5/12** | **2/8** | $0.00244 | 29.1 |
+| claude-haiku-4.5 | **11/12** | **8/8** | $0.00321 | 2.6 |
+
+The 8/8 was position-specific luck. glm fails on ~60% of decisions and ~75% of
+evaluations regardless of prompt.
+
+### The number that actually decides it
+
+Cost per **successful** call, not per call. At one point glm measured *more*
+expensive than Haiku ($0.0033 vs $0.0029), because a failure burns the full token
+budget and then triggers a retry. Even at its best it saves ~25% while being 11x
+slower — and headline token prices mislead by an order of magnitude whenever
+reliability differs.
+
+### Reliability here is correctness, not cost
+
+A failed tool call means that power **passes its turn**. A game where powers pass
+60% of the time is not Diplomacy, and an ablation measured on it is meaningless. The
+bar is therefore "high enough not to distort the experiment", which no amount of
+saving can substitute for.
+
+**Decision: `anthropic/claude-haiku-4.5` for all three roles, routed through
+OpenRouter** so one key serves everything. `glm-unreliable` is retained as a preset
+purely so the finding stays reproducible.
+
+### F11 — the failure was invisible because the fallbacks were plausible
+
+Three separate silent fallbacks had to be removed before any of this was measurable:
+
+1. `OrderDecider` returned `{"orders": []}` → runner substituted holds.
+2. The `no_decision` fix checked `data is None`, but the model returns `{}` — not
+   None — so the guard never fired. **A fix that did not work, reported as working.**
+3. `BeliefEvaluator` substituted `predicted_truthfulness 0.5 / confidence 0.0`.
+   In the last batch that was **304 of 642 evaluations — 47% exactly 0.500**.
+
+Point 3 invalidates §15's AUC 0.470 for a second, independent reason: roughly half
+the inputs to that metric were constants, which dilute toward chance by construction.
+The §15 ground-truth problem and this are separate defects that happened to point the
+same direction.
+
+All three are the same failure family as F8: **a failure quietly becoming a
+believable value.** Every one survived a full batch and a write-up precisely because
+the substituted values looked reasonable in the log. Nothing now substitutes a
+plausible default — an unscored message carries no `evaluation` field at all, and the
+eval harness excludes it.
+
+### The transferable lesson
+
+Benchmark on **cost per successful call**, on **several inputs**, with **failures
+that announce themselves**. Any of those three missing produces a confident, cheap,
+wrong answer — and this project produced exactly that, twice, before measuring
+properly.

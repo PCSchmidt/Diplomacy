@@ -653,18 +653,27 @@ PRESETS: dict[str, dict[str, str]] = {
         "belief_evaluator": "anthropic/claude-sonnet-5",
         "decision": "anthropic/claude-sonnet-5",
     },
-    # glm-5.3-flash honours tool-calling and discriminates on the evaluator task at
-    # roughly 15x less than claude-haiku-4.5, which is what makes a multi-game batch
-    # affordable. The evaluator keeps a stronger model, as every preset does: it is
-    # the component under test in D4.
-    "glm": {
+    # THE DEFAULT FOR LIVE RUNS. See ARCHITECTURE.md section 16.
+    #
+    # claude-haiku-4.5 routed through OpenRouter, so one key and one provider serve
+    # every role. Chosen on measured tool-call reliability, not headline price:
+    # across four positions it scored 11-12/12 on decisions and 8/8 on evaluations,
+    # against glm-5.3-flash's 5/12 and 2/8.
+    #
+    # Reliability here is a correctness requirement, not a cost preference. A failed
+    # tool call means that power passes its turn, which corrupts the game the
+    # ablation is measuring -- and per SUCCESSFUL call the cheap model was not even
+    # cheaper, because failures burn the full token budget and trigger retries.
+    "haiku": {
+        "negotiator": "anthropic/claude-haiku-4.5",
+        "belief_evaluator": "anthropic/claude-haiku-4.5",
+        "decision": "anthropic/claude-haiku-4.5",
+    },
+    # Retained so the finding stays reproducible, NOT recommended: glm fails to emit
+    # a tool call on roughly 60% of decisions and 75% of evaluations.
+    "glm-unreliable": {
         "negotiator": "z-ai/glm-5.3-flash",
         "belief_evaluator": "z-ai/glm-5.3-flash",
-        "decision": "z-ai/glm-5.3-flash",
-    },
-    "glm-mixed": {
-        "negotiator": "z-ai/glm-5.3-flash",
-        "belief_evaluator": "anthropic/claude-sonnet-5",
         "decision": "z-ai/glm-5.3-flash",
     },
     "openrouter-cheap": {
