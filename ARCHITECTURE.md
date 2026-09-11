@@ -1018,3 +1018,22 @@ so routing through a gateway silently drops the guarantee the schema appears to 
 Fixed by validating shape at the boundary: malformed entries are skipped and counted
 rather than crashed on. Batch-level failure isolation meant this cost 2 games instead
 of 24 — the robustness work paid for itself on its first real outing.
+
+### Scope decision: stopping here
+
+The four follow-ups above (stronger evaluator, richer context, longer games, better
+commitment extraction) are real and would each cost real money to test — a stronger
+evaluator alone is roughly $60 for a comparable 12-seed run. Deliberately not funding
+that chase for this portfolio piece.
+
+That is a scope call, not a resignation. The project's deliverable was never "prove
+the belief layer works" — it was **build a harness rigorous enough that its answer,
+whichever way it comes out, can be trusted.** That bar is met: three rounds of fixing
+the measurement itself (§15–§18) before a result that finally has a tight enough
+confidence interval to mean something (§19). A negative result from a sound harness
+is a complete, honest deliverable. Chasing a positive from here would be optimizing
+the finding rather than the engineering, which was never the point.
+
+Anyone who wants to spend the $60 has exactly what they need to do it: the routing
+preset, the batch command, and the eval harness all take a model swap as a one-line
+change.
