@@ -22,7 +22,7 @@ animation, or power count compete with the eval harness, they lose.
 | # | Decision | Choice | Rationale |
 |---|---|---|---|
 | D1 | Adjudicator | `diplomacy` PyPI lib (1.1.2), standard map | **Verified — see §8.** Zero rules-engine risk. Existing SVG map assets. Same engine lineage as Meta's CICERO. Buys back ~1 week for belief modeling. |
-| D2 | Power count | 4 LLM powers + 3 scripted bots | Bounds token cost and pairwise message blowup while keeping the standard map. |
+| D2 | Power count | ~~4 LLM + 3 scripted~~ **7 LLM powers (§18)** | Bounds token cost and pairwise message blowup while keeping the standard map. |
 | D3 | Demo delivery | Replay-first, fully static | Site is Astro `output: 'static'` on GitHub Pages — cannot host Python. Free, no API keys, never down. |
 | D4 | Ablation | Hard v1 requirement | The answer to "how do you know it does anything?" Constrains architecture from day one. |
 | D5 | Portfolio restructure | In scope, final phase | Shipping as card #14 of 14 converts nobody. |
@@ -881,3 +881,64 @@ than reversed — its two known causes are fixed, but nothing yet shows the beli
 layer works. Reliability is now ~$0.60/game against glm's $0.07, so a re-run costs
 roughly 8x more per seed; that is the price of a game where powers actually play
 their turns.
+
+
+---
+
+## 18. D2 revised: all seven powers are LLM-driven
+
+### What the reference library actually does
+
+Worth recording, because it shows our scripted-bot layer was a third thing with no
+precedent. `diplomacy` ships reduced-player variants using an `UNPLAYED` directive,
+and they **remove** powers rather than automating them:
+
+```python
+Game(map_name="standard_france_austria").powers   # -> ['AUSTRIA', 'FRANCE'] only
+get_centers("ENGLAND")                            # -> AttributeError; not a power
+```
+
+The removed powers' home centres become unowned and capturable. Only 2-player
+standard variants ship; **there is no official 4-power variant**, so our split had no
+precedent to follow.
+
+| Approach | Powers in game | Removed powers' centres |
+| --- | --- | --- |
+| Library variant (`UNPLAYED`) | only the played ones | neutral, capturable |
+| Research standard (CICERO) | all 7, all agent-controlled | n/a |
+| ~~Ours until now~~ | all 7, 3 scripted | owned and defended |
+
+### Why D2 was wrong
+
+The original justification was cost, and the arithmetic was wrong. It scaled with
+**dyads** — 42 vs 12, so 3.5x. But the negotiator is capped at 3 messages per phase,
+so evaluator calls scale with **powers x cap**, not dyads:
+
+| LLM powers | calls/phase | $/game (8ph) | 24-game ablation |
+| --- | --- | --- | --- |
+| 4 | 20 | $0.60 | $15 |
+| 7 | 35 | **$1.00 measured** | **$25** |
+
+1.75x, not 3.5x. Ten dollars on the definitive run.
+
+### The distortion it was causing
+
+Ranking all 35 four-power subsets by internal adjacency put the chosen set
+{Austria, England, France, Germany} at **rank 16 of 35**. Austria's three real
+rivals — Italy, Russia, Turkey — were all scripted, so it modelled only powers it
+never contested, while its actual threats were unmodellable. Belief modelling between
+powers that never contest territory is close to vacuous, and that is precisely the
+signal the ablation is trying to measure.
+
+Choosing a better subset would have reduced this. Using all seven eliminates it, and
+removes the subset-selection question entirely.
+
+### Verified live
+
+7 powers, 3 phases: **42/42 belief dyads exercised**, 21 decisions with 0
+non-decisions, 62 messages all scored by real calls, $1.00/game at 8 phases — within
+6% of estimate.
+
+`scripted_powers` is now empty. `bots.py` is retained: the Phase 1 deterministic
+spine still uses it, and it remains the hold-order fallback when a model fails to
+decide.

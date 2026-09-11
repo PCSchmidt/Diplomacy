@@ -1,6 +1,7 @@
 # AI Diplomacy — Theory of Mind engineering
 
-Seven AI powers negotiate, form alliances, and betray each other. Each keeps an
+Seven AI powers negotiate, form alliances, and betray each other — all seven
+LLM-driven, with a complete 42-dyad belief graph. Each keeps an
 explicit, inspectable model of what it believes the others intend — updated on what
 they *say* and, separately, on what they actually *do*.
 

@@ -25,8 +25,19 @@ class GameConfig:
     seed: int = 42
     arm: str = "belief_on"
     max_phases: int = 40
-    llm_powers: tuple[str, ...] = ("AUSTRIA", "ENGLAND", "FRANCE", "GERMANY")
-    scripted_powers: tuple[str, ...] = ("ITALY", "RUSSIA", "TURKEY")
+    # All seven powers are LLM-driven. D2 originally split 4 LLM + 3 scripted bots
+    # to bound cost, but that estimate scaled with dyads; the negotiator's 3-message
+    # cap means cost scales with powers, so seven is 1.75x rather than 3.5x.
+    #
+    # The scripted-bot layer was also a distortion the reference library has no
+    # concept of: it left each LLM power with neighbours it could not negotiate
+    # with, and Austria in particular modelled only powers it never contested.
+    # Every power now negotiates, which is the research convention and makes the
+    # belief graph complete. See ARCHITECTURE.md section 18.
+    llm_powers: tuple[str, ...] = (
+        "AUSTRIA", "ENGLAND", "FRANCE", "GERMANY", "ITALY", "RUSSIA", "TURKEY",
+    )
+    scripted_powers: tuple[str, ...] = ()
     # Phase 1 has no LLM, so the "llm" powers run a policy too. Phase 2 swaps this
     # for real negotiators without touching the loop.
     llm_stand_in: str = "greedy_expansion"
