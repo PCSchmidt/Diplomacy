@@ -111,6 +111,10 @@ def message_outcomes(log: dict) -> list[dict]:
                 "sender": m["sender"],
                 "recipient": m["recipient"],
                 "kept": bool(oc["kept"]),
+                # Older logs predate the field; absent means "unknown", and unknown
+                # is treated as falsifiable so pre-1.3.0 logs still parse. New runs
+                # always set it.
+                "falsifiable": oc.get("falsifiable", True),
                 "predicted_truthfulness":
                     (m.get("evaluation") or {}).get("predicted_truthfulness"),
                 "confidence": (m.get("evaluation") or {}).get("confidence"),
@@ -220,6 +224,7 @@ class ArmReport:
     messages: int = 0
     resolved: int = 0
     broken: int = 0
+    unfalsifiable_excluded: int = 0
 
     evaluator_auc: float | None = None
     evaluator_brier: float | None = None
@@ -256,7 +261,13 @@ def evaluate_arm(logs: Iterable[dict], arm: str) -> ArmReport:
         if not tl.is_synthetic(log):
             rep.synthetic = False
 
-        rows = message_outcomes(log)
+        all_rows = message_outcomes(log)
+        # A promise the speaker could not have broken is kept by default and tells
+        # the metric nothing. Excluded rather than counted as "kept", which is what
+        # drove the first run's base rate to 82%.
+        rows = [r for r in all_rows if r.get("falsifiable", True)]
+        rep.unfalsifiable_excluded += len(all_rows) - len(rows)
+
         rep.messages += sum(len(t.get("messages", [])) for t in log.get("turns", []))
         rep.resolved += len(rows)
         rep.broken += sum(1 for r in rows if not r["kept"])
@@ -343,7 +354,8 @@ class Report:
         return head + f"""| Metric | belief_on | belief_off | reads |
 | --- | --- | --- | --- |
 | Games | {on.games} | {off.games} | matched seeds |
-| Messages resolved | {on.resolved} | {off.resolved} | |
+| Messages resolved (falsifiable) | {on.resolved} | {off.resolved} | |
+| Excluded as unfalsifiable | {on.unfalsifiable_excluded} | {off.unfalsifiable_excluded} | promise the speaker could not have broken |
 | Promises broken | {on.broken} | {off.broken} | |
 | **Evaluator AUC** | **{f(on.evaluator_auc)}** | {f(off.evaluator_auc)} | 0.5 = no signal |
 | Evaluator Brier | {f(on.evaluator_brier)} | {f(off.evaluator_brier)} | lower better; 0.25 = always 0.5 |

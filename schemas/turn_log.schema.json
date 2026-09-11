@@ -570,6 +570,10 @@
         },
         "trust_after": {
           "$ref": "#/$defs/trust"
+        },
+        "falsifiable": {
+          "description": "Could the promiser actually have broken this commitment at the time it was made -- i.e. could it legally have moved into the pledged province? A pledge not to enter an unreachable province is kept by default and carries no information. 82% of the first live batch was of that kind, which is why its AUC measured noise (ARCHITECTURE.md section 15). The eval scores only falsifiable commitments.",
+          "type": "boolean"
         }
       }
     }

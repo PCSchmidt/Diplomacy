@@ -22,7 +22,7 @@ from typing import Any, Iterable
 
 from jsonschema import Draft202012Validator
 
-SCHEMA_VERSION = "1.2.0"
+SCHEMA_VERSION = "1.3.0"
 SCHEMA_PATH = Path(__file__).resolve().parent.parent / "schemas" / "turn_log.schema.json"
 
 # Fields stamped at serialization time rather than being game data (finding F1).

@@ -81,3 +81,33 @@ def export_game(game: Game) -> dict:
     saved = to_saved_game_format(game)
     saved["rules"] = [r for r in saved.get("rules", []) if r != "NO_PRESS"]
     return saved
+
+
+def can_reach(game, power: str, province: str) -> bool:
+    """Could `power` move a unit into `province` this phase?
+
+    This is what makes a commitment falsifiable. A pledge not to enter a province
+    the speaker cannot reach is kept by default and carries no information -- 82% of
+    commitments in the first live batch were of exactly that kind (ARCHITECTURE.md
+    section 15), which is why the eval measured noise.
+
+    Deliberately checks the legal-order list rather than raw adjacency: a fleet
+    beside an inland province is adjacent but cannot enter it, and counting that as
+    a real opportunity would reintroduce the same false positives in a subtler form.
+    """
+    target = province.split("/")[0].upper()
+    for loc in orderable_locations(game, power):
+        for order in possible_orders(game).get(loc, []):
+            if " - " not in order:
+                continue
+            dest = order.rsplit(" - ", 1)[-1].split(" VIA")[0].split("/")[0].strip()
+            if dest.upper() == target:
+                return True
+    return False
+
+
+def occupies(game, power: str, province: str) -> bool:
+    """Does `power` already hold a unit in `province`?"""
+    target = province.split("/")[0].upper()
+    return any(u.split()[-1].split("/")[0].upper() == target
+               for u in game.get_units(power))

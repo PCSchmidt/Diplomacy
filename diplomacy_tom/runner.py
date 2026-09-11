@@ -143,9 +143,12 @@ class GameRunner:
         self.stores[sender].observe_message(recipient, phase, message, sent=True)
         self.stores[recipient].observe_message(sender, phase, message)
         if commitment_province:
+            # Evaluated now, not at resolution time: what matters is whether the
+            # speaker had the opportunity to break its word when it gave it.
             self._open_commitments.setdefault(phase, []).append({
                 "message_id": message["message_id"], "sender": sender,
                 "recipient": recipient, "province": commitment_province,
+                "falsifiable": engine.can_reach(self.game, sender, commitment_province),
             })
 
     def _negotiate_llm(self, phase: str) -> list[dict]:
@@ -303,6 +306,7 @@ class GameRunner:
                 stated=f"no move on {province}",
                 actual="; ".join(actual[:3]) if actual else "(no orders)",
             )
+            falsifiable = bool(commitment.get("falsifiable"))
             dyad_corrections = getattr(observer_store, "dyads", {})
             if dyad_corrections:
                 last = dyad_corrections[sender].corrections[-1]
@@ -312,11 +316,13 @@ class GameRunner:
                     "stated": last["stated"], "actual": last["actual"],
                     "trust_before": last["trust_before"],
                     "trust_after": last["trust_after"],
+                    "falsifiable": falsifiable,
                 })
             else:  # stub store keeps no corrections
                 corrections.append({
                     "observer": recipient, "subject": sender,
                     "message_id": commitment["message_id"], "kept": not broke,
+                    "falsifiable": falsifiable,
                 })
 
         # Adjudicated orders are public -- every power may observe them.

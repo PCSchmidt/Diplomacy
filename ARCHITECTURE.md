@@ -828,3 +828,56 @@ Benchmark on **cost per successful call**, on **several inputs**, with **failure
 that announce themselves**. Any of those three missing produces a confident, cheap,
 wrong answer — and this project produced exactly that, twice, before measuring
 properly.
+
+
+---
+
+## 17. Both §15 confounds fixed, verified on live games
+
+### Reliability (the F11 family)
+
+Routing to `claude-haiku-4.5` and removing every silent fallback, verified end to end
+on live games rather than isolated calls:
+
+| | first batch | now |
+| --- | --- | --- |
+| `no_decision` rate | ~34% | **0/16, both arms** |
+| Evaluations that were real model output | 53% | **47/47 and 48/48** |
+| Message volume, belief_on vs belief_off | 89 vs 28 | **47 vs 48** |
+
+The third row settles a question §15 left open. The volume asymmetry was flagged
+there as a possible confound — perhaps the belief layer caused more negotiation. It
+was **an artifact of the unreliable model**, and disappeared entirely once tool calls
+stopped failing. Worth noting because the plausible causal story was wrong.
+
+### Ground truth (the §15 validity problem)
+
+A commitment now records, **at the moment it is made**, whether the speaker could
+legally have moved into the pledged province — `engine.can_reach()`. The eval scores
+only those, and reports the rest as excluded rather than silently counting them kept.
+
+`can_reach` deliberately consults the legal-order list rather than raw adjacency: a
+fleet beside an inland province is adjacent but cannot enter it, and counting that as
+an opportunity would reintroduce the same false positive in subtler form.
+
+The negotiator prompt now also asks for testable pledges — *"a promise nobody could
+break is not a promise"*.
+
+Measured on a live game:
+
+| | first batch | now |
+| --- | --- | --- |
+| Base rate "kept" | 82% | **42%** (10 kept / 14 broken) |
+| Unfalsifiable | ~87%, counted as kept | 50%, **excluded** |
+| Contested-subset classes | 12 kept, 0 broken (AUC undefined) | balanced |
+
+Near-balanced classes are what make AUC meaningful at all. The first batch could not
+have produced a usable number no matter how good the belief layer was.
+
+### What this does not settle
+
+The ablation has not been re-run. §15's negative result stands as withdrawn rather
+than reversed — its two known causes are fixed, but nothing yet shows the belief
+layer works. Reliability is now ~$0.60/game against glm's $0.07, so a re-run costs
+roughly 8x more per seed; that is the price of a game where powers actually play
+their turns.

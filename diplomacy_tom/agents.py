@@ -155,6 +155,11 @@ Be concrete: name provinces and units. A message that commits to nothing is wast
 You may deceive, but remember every order becomes public after adjudication, and
 counterparts remember.
 
+MAKE COMMITMENTS THAT CAN BE TESTED. Pledge about provinces your units can
+actually reach this turn. "I will not enter the Channel" means nothing if you have
+no fleet that can get there, and a promise nobody could break is not a promise.
+Name the province in concerns_provinces.
+
 BREVITY IS REQUIRED. Write at most 3 messages this phase. Each body must be one or
 two sentences, under 40 words. Do not explain your reasoning, do not restate the
 board, do not write preamble. Return messages via the send_messages tool."""
@@ -293,7 +298,11 @@ class Negotiator:
             mock_hint={
                 "sender": power,
                 "counterparts": [c for c in counterparts if c != power],
-                "provinces": sorted(game.map.scs),
+                # Reachable provinces only, so mock-generated commitments are
+                # falsifiable too and the eval path is exercised end to end.
+                "provinces": sorted(
+                    p for p in game.map.scs if engine.can_reach(game, power, p)
+                ) or sorted(game.map.scs),
             },
         )
         response = self.router.complete(request)
