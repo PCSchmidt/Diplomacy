@@ -162,7 +162,7 @@ Each ends in something showable.
 - [x] Calibration, betrayal lead time, alliance stability, cost per game
 - [x] Metrics verified against known inputs
 - [x] Run it against a real model — **done, result is negative (§15)**
-- [ ] Fix the ground-truth validity problem, then re-run
+- [x] Fix the ground-truth validity problem, re-run (§19)
 
 ### Phase 5 — Funnel
 - Restructure `projects.astro`: one hero (Diplomacy, live embedded artifact), three
@@ -942,3 +942,79 @@ non-decisions, 62 messages all scored by real calls, $1.00/game at 8 phases — 
 `scripted_powers` is now empty. `bots.py` is retained: the Phase 1 deterministic
 spine still uses it, and it remains the hold-order fallback when a model fails to
 decide.
+
+
+---
+
+## 19. The definitive ablation — a clean, well-powered negative result
+
+12 seeds x 2 arms, 8 phases, **all 7 powers LLM-driven**, `claude-haiku-4.5` via
+OpenRouter. 22 of 24 games completed; 2 failed and their partners were dropped to
+preserve seed pairing, leaving **10 matched pairs**. ~$25.
+Report: `reports/ablation-7power.md`, logs in `runs/haiku7/`.
+
+This is the first run where the measurement itself is sound. §15's result is
+superseded, not merely withdrawn.
+
+### The headline: the evaluator has no discriminative signal
+
+| | first run (broken) | this run |
+| --- | --- | --- |
+| n (falsifiable, scored) | 89 | **747** |
+| Evaluator AUC | 0.470 | **0.4993** |
+| 95% CI | [0.321, 0.616] | **[0.458, 0.541]** |
+| CI width | 0.295 | **0.083** |
+
+0.5 sits almost exactly at the centre of a tight interval. This is no longer
+"underpowered, cannot tell" — it rules out any effect larger than about ±0.04.
+**Ranked by the evaluator's predicted truthfulness, kept promises do not sort above
+broken ones.**
+
+### Calibration shows *why*, and it is not subtle
+
+| predicted band | n | said | actually kept | gap |
+| --- | --- | --- | --- | --- |
+| 0.0–0.2 | 60 | 0.148 | **0.800** | **+0.652** |
+| 0.2–0.4 | 160 | 0.294 | 0.619 | +0.324 |
+| 0.4–0.6 | 42 | 0.486 | 0.619 | +0.133 |
+| 0.6–0.8 | 345 | 0.715 | 0.626 | −0.088 |
+| 0.8–1.0 | 140 | 0.870 | 0.707 | −0.162 |
+
+The evaluator's **confident predictions are backwards**. When it says a promise has a
+15% chance of being kept, it is kept **80%** of the time. The base rate is 0.65, and
+a constant 0.65 predictor scores AUC 0.500 by definition — which is, within noise,
+exactly what the evaluator achieves.
+
+### Metrics that look favourable but are not evidence
+
+`belief_on` shows 54 anticipated betrayals (mean lead 0.75 phases) and 26 alliance
+spans; `belief_off` shows **0 and 0**. That comparison is vacuous: the stub holds
+trust constant at 0.5 by construction, so it *cannot* register a lead or a span. The
+contrast shows the belief layer moves, not that it moves *correctly* — and the AUC
+says it does not. Reporting these as a win would be exactly the kind of
+meaningless-positive the harness was built to refuse.
+
+### What this does and does not establish
+
+**Establishes:** with this prompt, this model and this commitment-extraction, the
+belief layer produces trust scores uncorrelated with whether promises are kept. The
+ToM claim is **not supported**.
+
+**Does not establish:** that the approach cannot work. Untested alternatives include
+a stronger evaluator model (haiku-4.5 is the cheapest tier), richer evidence in the
+evaluator's context (it currently sees message text and order history, not board
+pressure), longer games (8 phases is short for reputations to form), and better
+commitment extraction (58% are still discarded as unfalsifiable).
+
+The honest one-line summary: **the machinery is sound and the result is negative.**
+
+### F12 — `strict` is not enforced end to end
+
+Two games died on `AttributeError: 'str' object has no attribute 'get'`. The model
+returned `messages` as bare strings rather than objects. Tool schemas set
+`strict: true`, but **that is enforced by the Anthropic API and not by OpenRouter**,
+so routing through a gateway silently drops the guarantee the schema appears to give.
+
+Fixed by validating shape at the boundary: malformed entries are skipped and counted
+rather than crashed on. Batch-level failure isolation meant this cost 2 games instead
+of 24 — the robustness work paid for itself on its first real outing.

@@ -10,17 +10,20 @@ modelling can be built as **engineering rather than prompting**: recursive belie
 state, calibrated trust, and mechanically enforced information isolation, with
 falsifiable evidence that the belief layer does something.
 
-> **Status: Phase 4, first live ablation run — negative result.** The engine, belief
-> layer, LLM agents, eval harness and replay viewer all work end to end, on real
-> models, with seven gates green in CI.
+> **Status: Phase 4 complete — the result is negative, and the measurement is sound.**
 >
-> **The central claim is not established.** The first live run scored evaluator
-> AUC 0.470 (95% CI [0.321, 0.616]) — no detectable signal. Diagnosis showed the
-> *measurement* is at fault, not necessarily the model: 82% of commitments were
-> trivially kept because they pledged not to enter provinces the promiser could not
-> reach. See [ARCHITECTURE.md §15](ARCHITECTURE.md) for the full write-up and the
-> fix. I would rather publish this than a confident number resting on a meaningless
-> label.
+> All seven powers are LLM-driven with a complete 42-dyad belief graph. Seven gates
+> green in CI. The definitive ablation (12 seeds x 2 arms, ~$25) scored
+> **evaluator AUC 0.4993, 95% CI [0.458, 0.541]** on n=747 — chance, with the
+> interval tight enough to rule out any effect beyond ±0.04.
+>
+> **The Theory of Mind claim is not supported by this run.** Calibration shows why:
+> when the evaluator says a promise has a 15% chance of being kept, it is kept 80%
+> of the time. See [ARCHITECTURE.md §19](ARCHITECTURE.md).
+>
+> Getting to a *trustworthy* negative took three rounds of fixing the measurement
+> itself — §15 through §18 document each one. That work is the actual substance of
+> this project.
 
 ---
 

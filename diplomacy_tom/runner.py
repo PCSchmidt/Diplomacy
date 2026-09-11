@@ -74,6 +74,7 @@ class GameRunner:
         self._open_commitments: dict[str, list[dict]] = {}
 
         self.llm_calls: list[dict] = []
+        self.malformed_messages = 0
         self.provider_name = "none"
         self.router = None
         self.negotiator = self.evaluator = self.decider = None
@@ -179,11 +180,21 @@ class GameRunner:
             self._record(result, phase)
 
             for i, drafted in enumerate(result.data.get("messages", []) or []):
+                # Never trust the shape of model output. `strict` tool use is
+                # enforced by the Anthropic API but NOT by OpenRouter, so a model
+                # can return messages as bare strings instead of objects -- which
+                # killed two games of a 24-game batch with an AttributeError deep
+                # in the loop. Malformed entries are skipped and counted, not
+                # crashed on: one bad message must not cost a paid game.
+                if not isinstance(drafted, dict):
+                    self.malformed_messages += 1
+                    continue
                 recipient = drafted.get("recipient")
                 # A model may address a power that is not in this game, or itself.
                 if recipient not in self.cfg.all_powers or recipient == sender:
                     continue
-                intents = drafted.get("stated_intent", []) or []
+                intents = [x for x in (drafted.get("stated_intent") or [])
+                           if isinstance(x, dict)]
                 message = {
                     "message_id": f"{phase}-{sender[:3]}{recipient[:3]}-{i}",
                     "sender": sender,
