@@ -161,3 +161,29 @@ Archived the earlier text as Diplomacy.v1draft.md (6,692 words). All ten reader-
 9. Meridian, CICERO and the defense-interest detour removed (one clause on defense interest kept in the problem chapter).
 10. Repetition of the finding reduced; recruiter requirements table dropped; Likely questions split into short Q&A lines (five kept).
 Also: "fails closed" replaced with a plain description of the leak check; the guide names the builder only as "AI coding agents". Study-component model names (Claude Haiku 4.5, GLM) stay. Pictures regenerated: Diplomacy-parts.png and Diplomacy-learned-vs-rules.png (results and pledge-types unchanged). Dropped from the body only, facts unchanged above: E3 prompt versioning, caching-unused finding, README-versus-code leak-scan discrepancy, hash-seed CI detail, Brier score (0.294 versus 0.25 and about 0.23).
+
+## Author answers folded in, 2026-11-05
+
+Source: the 'Answer:' text for all 17 questions in Diplomacy.questions.md. Label: Author says. Claims changed in Diplomacy.md:
+
+- Q1: built as a game-theory project candidate (added to the origin paragraph).
+- Q2: surprise was that the model could not beat the game (added; tied to the measured result, a judge at coin-flip AUC 0.497; the repository measures the judge, not win rates).
+- Q3: understands the Beta trust formula least (added to the build chapter).
+- Q4: nobody else has used the replay page or the code (status paragraph; replaces "nothing shows").
+- Q5: harness named in the answer; kept out of the guide, which says only "AI coding agents".
+- Q6: most design decisions came from question-and-answer sessions with the agents (replaces "decisions that read as mine").
+- Q7: author read and approved the stop decision and the "do not spend the $60" call (build chapter, real-use chapter).
+- Q8 (S1, S9): did not state whether he knew or intended it; unsure; fix left to recommendation. Finding unchanged.
+- Q9 (S3, CL-08): unsure, "use best practices"; finding unchanged, fix left to recommendation.
+- Q10 (S7, CL-12): unsure, no preference; finding unchanged.
+- Q11 (S4, CL-09): does not recall whether pairing or label; fix left to recommendation.
+- Q12 (E14 item 7): does not know if or where the GLM logs were stored; now listed as a shortcoming.
+- Q13: model choice: author assumes cost played a part alongside reliability (stated as his assumption; no record).
+- Q14: cost figures believed to come from the coding tool's own cost display, otherwise OpenRouter activity; not verified against an invoice (CL-04 stays "as recorded; not invoiced").
+- Q15: considers the project worth finishing because it is in his portfolio; no time estimate; no backlog items chosen. The guide's earlier "fix the scoring and the demo, then freeze" and "three smaller steps" recommendations were removed because they chose on his behalf.
+- Q16: unsure about revisiting the AGPL obligation if hosted; stated as unsure.
+- Q17: defense-sector wording confirmed; unchanged.
+
+Length: trimmed to roughly the earlier size.
+
+Open after answers: see the end of Diplomacy.questions.md.
